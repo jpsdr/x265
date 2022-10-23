@@ -1466,7 +1466,7 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
             if (edgeIntensity < FRAME_EDGE_THRESHOLD)
                 preFrame->m_frameSegment = brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD? X265_AQ_AUTO_VARIANCE : X265_AQ_AUTO_VARIANCE_BIASED;
             else
-                preFrame->m_frameSegment = brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD? X265_AQ_EDGE : X265_AQ_EDGE_BIASED;
+                preFrame->m_frameSegment = brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD? X265_AQ_EDGE : X265_AQ_EDGE_BIASED_SBRC;
         }
         else
             preFrame->m_frameSegment = preFrame->m_param->rc.aqMode;
