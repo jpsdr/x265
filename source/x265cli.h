@@ -188,6 +188,7 @@ static const struct option long_options[] =
     { "aq-bias-strength", required_argument, NULL, 0 },
     { "sbrc",                 no_argument, NULL, 0 },
     { "no-sbrc",              no_argument, NULL, 0 },
+    { "sbrc-hyst",            no_argument, NULL, 0 },
     { "rc-grain",             no_argument, NULL, 0 },
     { "no-rc-grain",          no_argument, NULL, 0 },
     { "ipratio",        required_argument, NULL, 0 },
