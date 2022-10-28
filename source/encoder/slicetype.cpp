@@ -1471,9 +1471,9 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
                 else
                 {
                     if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_LOW)
-                        preFrame->m_frameSegment_thrs_edge = (edgeIntensity > (FRAME_EDGE_THRESHOLD * (1.0 + SBRC_FRAME_EDGE_HYST))) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+                        preFrame->m_frameSegment_thrs_edge = (edgeIntensity > FRAME_EDGE_THRESHOLD_HIGH) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
                     else
-                        preFrame->m_frameSegment_thrs_edge = (edgeIntensity < (FRAME_EDGE_THRESHOLD * (1.0 - SBRC_FRAME_EDGE_HYST))) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+                        preFrame->m_frameSegment_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD_LOW) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
                 }
 
                 if (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_NONE)
@@ -1481,9 +1481,9 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
                 else
                 {
                     if (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_LOW)
-                        preFrame->m_frameSegment_thrs_bright = (brightnessIntensity > (FRAME_BRIGHTNESS_THRESHOLD * (1.0 + SBRC_FRAME_BRIGHT_HYST))) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+                        preFrame->m_frameSegment_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD_HIGH) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
                     else
-                        preFrame->m_frameSegment_thrs_bright = (brightnessIntensity < (FRAME_BRIGHTNESS_THRESHOLD * (1.0 - SBRC_FRAME_BRIGHT_HYST))) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+                        preFrame->m_frameSegment_thrs_bright = (brightnessIntensity < FRAME_BRIGHTNESS_THRESHOLD_LOW) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
                 }
             }
             else
