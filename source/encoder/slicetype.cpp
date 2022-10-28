@@ -1495,7 +1495,12 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
             if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_LOW)
                 preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? X265_AQ_AUTO_VARIANCE : X265_AQ_AUTO_VARIANCE_BIASED;
             else
-                preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? X265_AQ_EDGE : X265_AQ_EDGE_BIASED_SBRC;
+            {
+                if (preFrame->m_param->rc.frameSegment_aq5)
+                    preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? X265_AQ_EDGE : X265_AQ_EDGE_BIASED;
+                else
+                    preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? X265_AQ_EDGE : X265_AQ_EDGE_BIASED_SBRC;
+            }
         }
         else
             preFrame->m_frameSegment = preFrame->m_param->rc.aqMode;

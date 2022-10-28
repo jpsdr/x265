@@ -286,6 +286,7 @@ namespace X265_NS {
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
         H1("   --[no-]sbrc                   Enables the segment based rate control, using its scene statistics. Default %s\n", OPT(param->rc.frameSegment));
         H1("   --sbrc-hyst                   Enables hystersis on the segment based rate control. Default %s\n", OPT(param->rc.frameSegment_hyst));
+        H1("   --sbrc-aq5                    Replace AQ-MODE 1 by AQ-MODE 5 on the segment based rate control. Default %s\n", OPT(param->rc.frameSegment_aq5));
         H0("   --qg-size <int>               Specifies the size of the quantization group (64, 32, 16, 8). Default %d\n", param->rc.qgSize);
         H0("   --[no-]cutree                 Enable cutree for Adaptive Quantization. Default %s\n", OPT(param->rc.cuTree));
         H0("   --[no-]rc-grain               Enable ratecontrol mode to handle grains specifically. turned on with tune grain. Default %s\n", OPT(param->rc.bEnableGrain));
