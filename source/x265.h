@@ -1767,6 +1767,7 @@ typedef struct x265_param
         int      bEnableConstVbv;
 
         int      frameSegment_hyst;
+        int      frameSegment_aq5;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
