@@ -1724,6 +1724,7 @@ void LookaheadTLD::collectPictureStatistics(Frame *curFrame)
 }
 
 
+
 void PreLookaheadGroup::processTasks(int workerThreadID)
 {
     if (workerThreadID < 0)
