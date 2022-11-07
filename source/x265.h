@@ -1505,6 +1505,7 @@ typedef struct x265_param
         /* enable SBRC mode for each sequence */
         int      frameSegment;
         int      frameSegment_hyst;
+        int      frameSegment_aq5;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
