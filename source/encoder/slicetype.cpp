@@ -1723,6 +1723,7 @@ void LookaheadTLD::collectPictureStatistics(Frame *curFrame)
     curFrame->m_lowres.bHistScenecutAnalyzed = false;
 }
 
+
 void PreLookaheadGroup::processTasks(int workerThreadID)
 {
     if (workerThreadID < 0)

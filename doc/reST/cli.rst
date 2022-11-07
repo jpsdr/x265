@@ -1778,6 +1778,11 @@ Quality, rate control and rate distortion options
 	To enable hysteresis on segment based rate control.
 	Default: disabled.
 
+.. option:: --sbrc-aq5
+
+	Replace AQ-MODE 1 by AQ-MODE 5 on segment based rate control.
+	Default: disabled.
+
 .. option:: --hevc-aq
 
 	Enable adaptive quantization
