@@ -602,7 +602,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                             else
                                 qp_adj = strength * (qp_adj - avg_adj);
                         }
-                        else if (curFrame->m_frameSegment == X265_AQ_EDGE_BIASED)
+                        else if (param->rc.aqMode == X265_AQ_EDGE_BIASED)
                         {
                             inclinedEdge = curFrame->m_lowres.edgeInclined[blockXY];
                             qp_adj = curFrame->m_lowres.qpCuTreeOffset[blockXY];
