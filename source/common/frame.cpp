@@ -63,6 +63,8 @@ Frame::Frame()
     m_thetaPic = NULL;
     m_edgeBitPlane = NULL;
     m_edgeBitPic = NULL;
+    m_frameSegment_thrs_bright = SBRC_THRS_NONE;
+    m_frameSegment_thrs_edge = SBRC_THRS_NONE;
     m_isInsideWindow = 0;
 
     // mcstf

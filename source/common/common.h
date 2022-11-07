@@ -162,7 +162,13 @@ typedef uint64_t sse_t;
 #define MAX_MAX_QPSCALE 615.46574234477100
 #define FRAME_BRIGHTNESS_THRESHOLD  50.0 // Min % of pixels in a frame, that are above BRIGHTNESS_THRESHOLD for it to be considered a bright frame
 #define FRAME_EDGE_THRESHOLD  10.0 // Min % of edge pixels in a frame, for it to be considered to have high edge density
-
+#define FRAME_BRIGHTNESS_THRESHOLD_HIGH  60.0 // High hysteresis % of pixels in a frame, that are above BRIGHTNESS_THRESHOLD for it to be considered a bright frame
+#define FRAME_BRIGHTNESS_THRESHOLD_LOW  40.0 // Low hysteresis % of pixels in a frame, that are above BRIGHTNESS_THRESHOLD for it to be considered a bright frame
+#define FRAME_EDGE_THRESHOLD_HIGH  17.0 // High hysteresis % of edge pixels in a frame, for it to be considered to have high edge density
+#define FRAME_EDGE_THRESHOLD_LOW  7.0 // Low hysteresis % of edge pixels in a frame, for it to be considered to have high edge density
+#define SBRC_THRS_NONE 0
+#define SBRC_THRS_LOW 1
+#define SBRC_THRS_HIGH 2
 
 template<typename T>
 inline T x265_min(T a, T b) { return a < b ? a : b; }
