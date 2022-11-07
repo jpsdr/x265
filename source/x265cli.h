@@ -187,6 +187,7 @@ static const struct option long_options[] =
     { "sbrc",                 no_argument, NULL, 0 },
     { "sbrc-hyst",            no_argument, NULL, 0 },
     { "sbrc-aq5",             no_argument, NULL, 0 },
+    { "sbrc-hdr",             no_argument, NULL, 0 },
     { "no-sbrc",              no_argument, NULL, 0 },
     { "rc-grain",             no_argument, NULL, 0 },
     { "no-rc-grain",          no_argument, NULL, 0 },
