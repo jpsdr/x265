@@ -155,7 +155,8 @@ public:
 
     /* segment for each frame */
     int                    m_frameSegment;
-
+    int                    m_frameSegment_thrs_bright;
+    int                    m_frameSegment_thrs_edge;
 
     int                    m_isInsideWindow;
 
