@@ -1773,6 +1773,11 @@ Quality, rate control and rate distortion options
 	keyframe interval specified.If unspecified,default keyframe interval will be used.
 	Default: disabled.
 
+.. option:: --sbrc-hyst
+
+	To enable hysteresis on segment based rate control.
+	Default: disabled.
+
 .. option:: --hevc-aq
 
 	Enable adaptive quantization

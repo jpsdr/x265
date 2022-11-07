@@ -586,7 +586,6 @@ typedef enum
 #define X265_AQ_AUTO_VARIANCE_BIASED 3
 #define X265_AQ_EDGE                 4
 #define X265_AQ_EDGE_BIASED          5
-#define X265_AQ_EDGE_BIASED_SBRC     1
 #define x265_ADAPT_RD_STRENGTH   4
 #define X265_REFINE_INTER_LEVELS 3
 /* NOTE! For this release only X265_CSP_I420 and X265_CSP_I444 are supported */
@@ -1770,6 +1769,8 @@ typedef struct x265_param
 
         /* internally enable if tune grain is set */
         int      bEnableConstVbv;
+
+        int      frameSegment_hyst;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
