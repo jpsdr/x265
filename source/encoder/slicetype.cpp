@@ -1799,6 +1799,11 @@ void LookaheadTLD::calcFrameSegment(Frame *preFrame)
     aqm = X265_AQ_AUTO_VARIANCE_BIASED;
 
     if (preFrame->m_param->rc.frameSegment_aq5) aqm_e = X265_AQ_EDGE_BIASED;
+    if (preFrame->m_param->rc.frameSegment_hdr)
+    {
+        aqm_e = X265_AQ_VARIANCE;
+        aqm = X265_AQ_AUTO_VARIANCE;
+    }
 
     if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_LOW)
         preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? aqm_b : aqm;

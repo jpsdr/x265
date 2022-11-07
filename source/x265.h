@@ -1505,6 +1505,7 @@ typedef struct x265_param
         int      frameSegment;
         int      frameSegment_hyst;
         int      frameSegment_aq5;
+        int      frameSegment_hdr;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
