@@ -155,6 +155,8 @@ public:
     pixel*                 m_edgeBitPic;
 
     int                    m_isInsideWindow;
+    int                    m_frameSegment_thrs_bright;
+    int                    m_frameSegment_thrs_edge;
 
     /*Frame's temporal layer info*/
     uint8_t                m_tempLayer;

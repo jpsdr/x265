@@ -1772,6 +1772,11 @@ Quality, rate control and rate distortion options
 	To enable and disable segment based rate control.
 	Default: disabled.
 
+.. option:: --sbrc-hyst
+
+	To enable hysteresis on segment based rate control.
+	Default: disabled.
+
 .. option:: --hevc-aq
 
 	Enable adaptive quantization
