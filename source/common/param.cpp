@@ -300,6 +300,7 @@ void x265_param_default(x265_param* param)
     param->rc.frameSegment = 0;
     param->rc.frameSegment_hyst = 0;
     param->rc.frameSegment_aq5 = 0;
+    param->rc.frameSegment_hdr = 0;
     param->decoderVbvMaxRate = 0;
     param->bliveVBV2pass = 0;
 
@@ -1239,6 +1240,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("sbrc") p->rc.frameSegment = atobool(value);
         OPT("sbrc-hyst") p->rc.frameSegment_hyst = atobool(value);
         OPT("sbrc-aq5") p->rc.frameSegment_aq5 = atobool(value);
+        OPT("sbrc-hdr") p->rc.frameSegment_hdr = atobool(value);
         OPT("dynamic-rd") p->dynamicRd = atof(value);
         OPT("analysis-reuse-level")
         {
@@ -2011,6 +2013,7 @@ void x265_print_params(x265_param* param)
         strcpy_s(str_sbrc, 20, "auto");
         if (param->rc.frameSegment_hyst) strcat_s(str_sbrc, 20, "-hyst");
         if (param->rc.frameSegment_aq5) strcat_s(str_sbrc, 20, "-aq5");
+        if (param->rc.frameSegment_hdr) strcat_s(str_sbrc, 20, "-hdr");
 
         x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree  : %s / %0.1f / %d / %d\n", str_sbrc, param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
     }
@@ -2328,6 +2331,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     BOOL(p->rc.frameSegment, "sbrc");
     BOOL(p->rc.frameSegment_hyst, "sbrc-hyst");
     BOOL(p->rc.frameSegment_aq5, "sbrc-aq5");
+    BOOL(p->rc.frameSegment_aq5, "sbrc-hdr");
     BOOL(p->bEmitHDR10SEI, "hdr10");
     BOOL(p->bHDR10Opt, "hdr10-opt");
     BOOL(p->bDhdr10opt, "dhdr10-opt");
@@ -2626,6 +2630,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->rc.frameSegment = src->rc.frameSegment;
     dst->rc.frameSegment_hyst = src->rc.frameSegment_hyst;
     dst->rc.frameSegment_aq5 = src->rc.frameSegment_aq5;
+    dst->rc.frameSegment_hdr = src->rc.frameSegment_hdr;
 
     dst->vui.aspectRatioIdc = src->vui.aspectRatioIdc;
     dst->vui.sarWidth = src->vui.sarWidth;
