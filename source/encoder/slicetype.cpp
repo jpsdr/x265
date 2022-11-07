@@ -1750,6 +1750,7 @@ void LookaheadTLD::calcFrameSegment(Frame *preFrame)
     pixel *lumaPlane = preFrame->m_lowres.fpelPlane[0];
     intptr_t stride = preFrame->m_lowres.lumaStride;
     double brightnessIntensity = 0, edgeIntensity = 0;
+    int aqm_eb, aqm_e, aqm_b, aqm;
 
     /* Edge plane computation */
     memset(preFrame->m_lowres.lowresEdgePlane, 0, stride * (heightL + (preFrame->m_fencPic->m_lumaMarginY * 2)) * sizeof(pixel));
@@ -1763,10 +1764,44 @@ void LookaheadTLD::calcFrameSegment(Frame *preFrame)
     brightnessIntensity = computeBrightnessIntensity(lumaPlane, widthL, heightL, stride);
 
     /* AQ mode switch */
-    if (edgeIntensity < FRAME_EDGE_THRESHOLD)
-        preFrame->m_frameSegment = brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD ? X265_AQ_AUTO_VARIANCE : X265_AQ_AUTO_VARIANCE_BIASED;
+    /* If hysteresis enabled */
+    if (preFrame->m_param->rc.frameSegment_hyst)
+    {
+        if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_NONE)
+            preFrame->m_frameSegment_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+        else
+        {
+            if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_LOW)
+                preFrame->m_frameSegment_thrs_edge = (edgeIntensity > FRAME_EDGE_THRESHOLD_HIGH) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+            else
+                preFrame->m_frameSegment_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD_LOW) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+        }
+
+        if (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_NONE)
+            preFrame->m_frameSegment_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+        else
+        {
+            if (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_LOW)
+                preFrame->m_frameSegment_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD_HIGH) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+            else
+                preFrame->m_frameSegment_thrs_bright = (brightnessIntensity < FRAME_BRIGHTNESS_THRESHOLD_LOW) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+        }
+    }
     else
-        preFrame->m_frameSegment = brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD ? X265_AQ_EDGE : X265_AQ_VARIANCE;
+    {
+        preFrame->m_frameSegment_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? SBRC_THRS_LOW : SBRC_THRS_HIGH;
+        preFrame->m_frameSegment_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? SBRC_THRS_HIGH : SBRC_THRS_LOW;
+    }
+
+    aqm_eb = X265_AQ_EDGE;
+    aqm_e = X265_AQ_VARIANCE;
+    aqm_b = X265_AQ_AUTO_VARIANCE;
+    aqm = X265_AQ_AUTO_VARIANCE_BIASED;
+
+    if (preFrame->m_frameSegment_thrs_edge == SBRC_THRS_LOW)
+        preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? aqm_b : aqm;
+    else
+        preFrame->m_frameSegment = (preFrame->m_frameSegment_thrs_bright == SBRC_THRS_HIGH) ? aqm_eb : aqm_e;
 
     preFrame->m_param->rc.aqMode = preFrame->m_frameSegment;
 }
