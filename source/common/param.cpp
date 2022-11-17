@@ -2141,7 +2141,7 @@ void x265_print_params(x265_param* param)
         if (param->rc.frameSegment_aq5) strcat_s(str_sbrc, 20, "-aq5");
         if (param->rc.frameSegment_hdr) strcat_s(str_sbrc, 20, "-hdr");
 
-        x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree  : %s / %0.1f / %d / %d\n", str_sbrc, param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
+        x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree      : %s / %0.1f / %d / %d\n", str_sbrc, param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
     }
 
     if (param->bLossless)
