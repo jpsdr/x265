@@ -4320,6 +4320,10 @@ void Encoder::configure(x265_param *p)
         x265_log(p, X265_LOG_WARNING, "maxSlices can not be more than min(rows, MAX_NAL_UNITS-1), force set to %d\n", slicesLimit);
         p->maxSlices = slicesLimit;
     }
+	
+    if (p->videoSignalTypePreset)     // Default disabled.
+        configureVideoSignalTypePreset(p);
+	
     if (p->bHDR10Opt)
     {
         if (p->internalCsp != X265_CSP_I420 || p->internalBitDepth != 10 || p->vui.colorPrimaries != 9 ||
@@ -4333,9 +4337,6 @@ void Encoder::configure(x265_param *p)
             p->bHDR10Opt = 0;
         }
     }
-
-    if (p->videoSignalTypePreset)     // Default disabled.
-        configureVideoSignalTypePreset(p);
 
     if (m_param->toneMapFile || p->bHDR10Opt || p->bEmitHDR10SEI)
     {
