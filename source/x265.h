@@ -1418,6 +1418,9 @@ typedef struct x265_param
         /* Sets the bias towards dark scenes in AQ modes 3 and 5. */
         double    aqBiasStrength;
 
+        /* Disable Gaussian blur in AQ modes 4 & 5. */
+        int       aqFastEdge;
+
         /* Delta QP range by QP adaptation based on a psycho-visual model.
          * Acceptable values between 1.0 to 6.0 */
         double    qpAdaptationRange;
