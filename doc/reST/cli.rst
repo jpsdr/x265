@@ -1788,6 +1788,10 @@ Quality, rate control and rate distortion options
 	Don't use biased mode on sbrc (--sbrc-aq5 has no effect in this case).
 	Default: disabled.
 
+.. option:: --aq-fast-edge
+
+	Disable Gaussian blur in AQ modes 4 & 5 for minor speed improvements.
+
 .. option:: --hevc-aq
 
 	Enable adaptive quantization
