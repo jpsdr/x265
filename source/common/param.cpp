@@ -1542,6 +1542,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
             p->selectiveSAO = atoi(value);
         }
         OPT("fades") p->bEnableFades = atobool(value);
+        OPT("scenecut-aware-qp") p->bEnableSceneCutAwareQp = atoi(value);
         OPT("field") p->bField = atobool( value );
         OPT("cll") p->bEmitCLL = atobool(value);
         OPT("frame-dup") p->bEnableFrameDuplication = atobool(value);
