@@ -212,6 +212,9 @@ bool Lowres::create(x265_param* param, PicYuv *origPic, uint32_t qgSize)
         }
     }
 
+    if (param->rc.AQAuto)
+        lowresEdgePlane = X265_MALLOC(pixel, lumaStride * (lines + (origPic->m_lumaMarginY * 2)));
+
     if (param->bHistBasedSceneCut)
     {
         quarterSampleLowResWidth = widthFullRes / 4;
@@ -290,6 +293,8 @@ void Lowres::destroy(x265_param* param)
     X265_FREE(qpAqMotionOffset);
     if (param->bDynamicRefine || param->bEnableFades)
         X265_FREE(blockVariance);
+    if (param->rc.AQAuto)
+        X265_FREE(lowresEdgePlane);
     if (maxAQDepth > 0)
     {
         for (uint32_t d = 0; d < 4; d++)
