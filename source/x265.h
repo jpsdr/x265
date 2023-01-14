@@ -1773,9 +1773,11 @@ typedef struct x265_param
         /* internally enable if tune grain is set */
         int      bEnableConstVbv;
 
-        int      frameSegment_hyst;
-        int      frameSegment_aq5;
-        int      frameSegment_hdr;
+        /* enable auto-AQ mode for each sequence */
+        int      AQAuto;
+        int      AQAuto_hyst;
+        int      AQAuto_aq5;
+        int      AQAuto_hdr;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
