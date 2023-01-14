@@ -154,9 +154,12 @@ public:
     pixel*                 m_edgeBitPlane;
     pixel*                 m_edgeBitPic;
 
+    /* AQ for each frame */
+    int                    m_AutoAQ;
+    int                    m_AutoAQ_thrs_bright;
+    int                    m_AutoAQ_thrs_edge;
+
     int                    m_isInsideWindow;
-    int                    m_frameSegment_thrs_bright;
-    int                    m_frameSegment_thrs_edge;
 
     /*Frame's temporal layer info*/
     uint8_t                m_tempLayer;

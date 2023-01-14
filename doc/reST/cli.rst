@@ -1770,22 +1770,27 @@ Quality, rate control and rate distortion options
 .. option:: --sbrc --no-sbrc
 
 	To enable and disable segment based rate control.Segment duration depends on the
-	keyframe interval specified.If unspecified,default keyframe interval will be used.
+	keyframe interval specified. If unspecified, default keyframe interval will be used.
 	Default: disabled.
 
-.. option:: --sbrc-hyst
+.. option:: --aq-auto
 
-	To enable hysteresis on segment based rate control.
+	Enable auto-AQ mode.
 	Default: disabled.
 
-.. option:: --sbrc-aq5
+.. option:: --aq-auto-hyst
 
-	Replace AQ-MODE 1 by AQ-MODE 5 on segment based rate control.
+	To enable hysteresis on auto-AQ.
 	Default: disabled.
 
-.. option:: --sbrc-hdr
+.. option:: --aq-auto-aq5
 
-	Don't use biased mode on sbrc (--sbrc-aq5 has no effect in this case).
+	Replace AQ-MODE 1 by AQ-MODE 5 on auto-AQ.
+	Default: disabled.
+
+.. option:: --aq-auto-hdr
+
+	Don't use biased mode on auto-AQ (--aq-auto-aq5 has no effect in this case).
 	Default: disabled.
 
 .. option:: --aq-fast-edge
