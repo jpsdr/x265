@@ -133,7 +133,7 @@ struct LookaheadTLD
     uint32_t calcVariance(pixel* src, intptr_t stride, intptr_t blockOffset, uint32_t plane);
 
     void calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param);
-    void calcFrameSegment(Frame *curFrame);
+    void calcAutoAQ(Frame* curFrame);
     void lowresIntraEstimate(Lowres& fenc, uint32_t qgSize);
 
     void weightsAnalyse(Lowres& fenc, Lowres& ref);
