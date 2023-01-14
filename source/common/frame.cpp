@@ -63,8 +63,9 @@ Frame::Frame()
     m_thetaPic = NULL;
     m_edgeBitPlane = NULL;
     m_edgeBitPic = NULL;
-    m_frameSegment_thrs_bright = SBRC_THRS_NONE;
-    m_frameSegment_thrs_edge = SBRC_THRS_NONE;
+    m_AutoAQ = 0;
+    m_AutoAQ_thrs_bright = AQ_AUTO_THRS_NONE;
+    m_AutoAQ_thrs_edge = AQ_AUTO_THRS_NONE;
     m_isInsideWindow = 0;
 
     // mcstf
@@ -134,7 +135,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
         CHECKED_MALLOC_ZERO(m_classifyCount, uint32_t, size);
     }
 
-    if (param->rc.aqMode == X265_AQ_EDGE || param->rc.aqMode == X265_AQ_EDGE_BIASED || (param->rc.zonefileCount && param->rc.aqMode != 0))
+    if (param->rc.aqMode == X265_AQ_EDGE || param->rc.AQAuto || param->rc.aqMode == X265_AQ_EDGE_BIASED || (param->rc.zonefileCount && param->rc.aqMode != 0))
     {
         uint32_t numCuInWidth = (param->sourceWidth + param->maxCUSize - 1) / param->maxCUSize;
         uint32_t numCuInHeight = (param->sourceHeight + param->maxCUSize - 1) / param->maxCUSize;
@@ -344,7 +345,7 @@ void Frame::destroy()
         X265_FREE_ZERO(m_classifyCount);
     }
 
-    if (m_param->rc.aqMode == X265_AQ_EDGE || m_param->rc.frameSegment || m_param->rc.aqMode == X265_AQ_EDGE_BIASED || (m_param->rc.zonefileCount && m_param->rc.aqMode != 0))
+    if (m_param->rc.aqMode == X265_AQ_EDGE || m_param->rc.AQAuto || m_param->rc.aqMode == X265_AQ_EDGE_BIASED || (m_param->rc.zonefileCount && m_param->rc.aqMode != 0))
     {
         X265_FREE(m_edgePic);
         X265_FREE(m_gaussianPic);

@@ -130,6 +130,7 @@ typedef uint64_t sum2_t;
 typedef uint64_t pixel4;
 typedef int64_t  ssum2_t;
 #define SHIFT_TO_BITPLANE 9
+#define BRIGHTNESS_THRESHOLD 120 // The threshold above which a pixel is bright
 #else
 typedef uint8_t  pixel;
 typedef uint16_t sum_t;
@@ -137,6 +138,7 @@ typedef uint32_t sum2_t;
 typedef uint32_t pixel4;
 typedef int32_t  ssum2_t; // Signed sum
 #define SHIFT_TO_BITPLANE 7
+#define BRIGHTNESS_THRESHOLD 30 // The threshold above which a pixel is bright
 #endif // if HIGH_BIT_DEPTH
 
 #if X265_DEPTH < 10
@@ -166,9 +168,9 @@ typedef uint64_t sse_t;
 #define FRAME_BRIGHTNESS_THRESHOLD_LOW  40.0 // Low hysteresis % of pixels in a frame, that are above BRIGHTNESS_THRESHOLD for it to be considered a bright frame
 #define FRAME_EDGE_THRESHOLD_HIGH  17.0 // High hysteresis % of edge pixels in a frame, for it to be considered to have high edge density
 #define FRAME_EDGE_THRESHOLD_LOW  7.0 // Low hysteresis % of edge pixels in a frame, for it to be considered to have high edge density
-#define SBRC_THRS_NONE 0
-#define SBRC_THRS_LOW 1
-#define SBRC_THRS_HIGH 2
+#define AQ_AUTO_THRS_NONE 0
+#define AQ_AUTO_THRS_LOW 1
+#define AQ_AUTO_THRS_HIGH 2
 
 template<typename T>
 inline T x265_min(T a, T b) { return a < b ? a : b; }
