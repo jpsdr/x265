@@ -1441,6 +1441,44 @@ void Lookahead::getEstimatedPictureCost(Frame *curFrame)
     }
 }
 
+double computeBrightnessIntensity(pixel* inPlane, int width, int height, intptr_t stride)
+{
+    pixel* rowStart = inPlane;
+    double count = 0;
+
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            if (rowStart[j] > BRIGHTNESS_THRESHOLD)
+                count++;
+        }
+        rowStart += stride;
+    }
+
+    /* Returns the brightness percentage of the input plane */
+    return (count / (width * height)) * 100;
+}
+
+double computeEdgeIntensity(pixel* inPlane, int width, int height, intptr_t stride)
+{
+    pixel* rowStart = inPlane;
+    double count = 0;
+
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            if (rowStart[j] > 0)
+                count++;
+        }
+        rowStart += stride;
+    }
+
+    /* Returns the edge percentage of the input plane */
+    return (count / (width * height)) * 100;
+}
+
 uint32_t LookaheadTLD::calcVariance(pixel* inpSrc, intptr_t stride, intptr_t blockOffset, uint32_t plane)
 {
     pixel* src = inpSrc + blockOffset;
@@ -1726,7 +1764,75 @@ void LookaheadTLD::collectPictureStatistics(Frame *curFrame)
     curFrame->m_lowres.bHistScenecutAnalyzed = false;
 }
 
+void LookaheadTLD::calcAutoAQ(Frame* preFrame)
+{
+    int heightL = preFrame->m_lowres.lines;
+    int widthL = preFrame->m_lowres.width;
+    pixel* lumaPlane = preFrame->m_lowres.fpelPlane[0];
+    intptr_t stride = preFrame->m_lowres.lumaStride;
+    double brightnessIntensity = 0, edgeIntensity = 0;
+    int aqm_eb, aqm_e, aqm_b, aqm;
 
+    /* Edge plane computation */
+    memset(preFrame->m_lowres.lowresEdgePlane, 0, stride * (heightL + (preFrame->m_fencPic->m_lumaMarginY * 2)) * sizeof(pixel));
+    pixel* lowresEdgePic = preFrame->m_lowres.lowresEdgePlane + preFrame->m_fencPic->m_lumaMarginY * stride + preFrame->m_fencPic->m_lumaMarginX;
+    computeEdge(lowresEdgePic, lumaPlane, NULL, stride, heightL, widthL, false);
+
+    /*Frame edge percentage computation */
+    edgeIntensity = computeEdgeIntensity(lowresEdgePic, widthL, heightL, stride);
+
+    /* Frame Brightness percentage computation */
+    brightnessIntensity = computeBrightnessIntensity(lumaPlane, widthL, heightL, stride);
+
+    /* AQ mode switch */
+    /* If hysteresis enabled */
+    if (preFrame->m_param->rc.AQAuto_hyst)
+    {
+        if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_NONE)
+            preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        else
+        {
+            if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
+                preFrame->m_AutoAQ_thrs_edge = (edgeIntensity > FRAME_EDGE_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+            else
+                preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        }
+
+        if (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_NONE)
+            preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+        else
+        {
+            if (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_LOW)
+                preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+            else
+                preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity < FRAME_BRIGHTNESS_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        }
+    }
+    else
+    {
+        preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+    }
+
+    aqm_eb = X265_AQ_EDGE;
+    aqm_e = X265_AQ_VARIANCE;
+    aqm_b = X265_AQ_AUTO_VARIANCE;
+    aqm = X265_AQ_AUTO_VARIANCE_BIASED;
+
+    if (preFrame->m_param->rc.AQAuto_aq5) aqm_e = X265_AQ_EDGE_BIASED;
+    if (preFrame->m_param->rc.AQAuto_hdr)
+    {
+        aqm_e = X265_AQ_VARIANCE;
+        aqm = X265_AQ_AUTO_VARIANCE;
+    }
+
+    if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
+        preFrame->m_AutoAQ = (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_b : aqm;
+    else
+        preFrame->m_AutoAQ = (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_eb : aqm_e;
+
+    preFrame->m_param->rc.aqMode = preFrame->m_AutoAQ;
+}
 
 void PreLookaheadGroup::processTasks(int workerThreadID)
 {
@@ -1742,6 +1848,11 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
         ProfileScopeEvent(prelookahead);
         m_lock.release();
         preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc);
+
+        /* Auto-AQ mode */
+        if (preFrame->m_param->rc.AQAuto)
+            tld.calcAutoAQ(preFrame);
+
         if (m_lookahead.m_bAdaptiveQuant)
             tld.calcAdaptiveQuantFrame(preFrame, m_lookahead.m_param);
 
