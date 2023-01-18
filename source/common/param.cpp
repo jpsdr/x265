@@ -308,9 +308,9 @@ void x265_param_default(x265_param* param)
     param->bResetZoneConfig = 1;
     param->reconfigWindowSize = 0;
     param->rc.AQAuto = 0;
-    param->rc.AQAuto_hyst = 0;
-    param->rc.AQAuto_aq5 = 0;
-    param->rc.AQAuto_hdr = 0;
+    param->rc.AQAuto_hyst = false;
+    param->rc.AQAuto_aq5 = false;
+    param->rc.AQAuto_hdr = false;
     param->decoderVbvMaxRate = 0;
     param->bliveVBV2pass = 0;
 
@@ -1289,10 +1289,13 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("multi-pass-opt-analysis") p->analysisMultiPassRefine = atobool(value);
         OPT("multi-pass-opt-distortion") p->analysisMultiPassDistortion = atobool(value);
         OPT("aq-motion") p->bAQMotion = atobool(value);
-        OPT("aq-auto") p->rc.AQAuto = atobool(value);
-        OPT("aq-auto-hyst") p->rc.AQAuto_hyst = atobool(value);
-        OPT("aq-auto-aq5") p->rc.AQAuto_aq5 = atobool(value);
-        OPT("aq-auto-hdr") p->rc.AQAuto_hdr = atobool(value);
+        OPT("aq-auto")
+        {
+            p->rc.AQAuto = atoi(value);
+            p->rc.AQAuto_hyst = (p->rc.AQAuto & 0x02) != 0;
+            p->rc.AQAuto_hdr = (p->rc.AQAuto & 0x04) != 0;
+            p->rc.AQAuto_aq5 = (p->rc.AQAuto & 0x08) != 0;
+        }
         OPT("dynamic-rd") p->dynamicRd = atof(value);
 		OPT("cra-nal") p->craNal = atobool(value);
         OPT("analysis-reuse-level")
@@ -1997,17 +2000,17 @@ void x265_print_params(x265_param* param)
              param->maxNumReferences, (param->limitReferences & X265_REF_LIMIT_CU) ? "on" : "off",
              (param->limitReferences & X265_REF_LIMIT_DEPTH) ? "on" : "off");
 
-    if (param->rc.aqMode && !param->rc.AQAuto)
+    if (param->rc.aqMode && (param->rc.AQAuto == 0))
         x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree      : %d / %0.1f / %d / %d\n", param->rc.aqMode,
             param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
-    else if (param->rc.AQAuto)
+    else if (param->rc.AQAuto != 0)
     {
         char str_aqauto[20];
 
         strcpy_s(str_aqauto, 20, "auto");
         if (param->rc.AQAuto_hyst) strcat_s(str_aqauto, 20, "-hyst");
-        if (param->rc.AQAuto_aq5) strcat_s(str_aqauto, 20, "-aq5");
         if (param->rc.AQAuto_hdr) strcat_s(str_aqauto, 20, "-hdr");
+        if (param->rc.AQAuto_aq5) strcat_s(str_aqauto, 20, "-aq5");
 
         x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree      : %s / %0.1f / %d / %d\n", str_aqauto, param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
     }
@@ -2323,10 +2326,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += sprintf(s, " scenecut-bias=%.2f", p->scenecutBias);
     BOOL(p->bOptCUDeltaQP, "opt-cu-delta-qp");
     BOOL(p->bAQMotion, "aq-motion");
-    BOOL(p->rc.AQAuto, "aq-auto");
-    BOOL(p->rc.AQAuto_hyst, "aq-auto-hyst");
-    BOOL(p->rc.AQAuto_aq5, "aq-auto-aq5");
-    BOOL(p->rc.AQAuto_hdr, "aq-auto-hdr");
+    s += sprintf(s, " aq-auto=%d", p->rc.AQAuto);
     BOOL(p->bEmitHDR10SEI, "hdr10");
     BOOL(p->bHDR10Opt, "hdr10-opt");
     BOOL(p->bDhdr10opt, "dhdr10-opt");
