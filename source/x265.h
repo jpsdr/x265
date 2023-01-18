@@ -1770,9 +1770,9 @@ typedef struct x265_param
 
         /* enable auto-AQ mode for each sequence */
         int      AQAuto;
-        int      AQAuto_hyst;
-        int      AQAuto_aq5;
-        int      AQAuto_hdr;
+        bool     AQAuto_hyst;
+        bool     AQAuto_aq5;
+        bool     AQAuto_hdr;
 
         /* if only the focused frames would be re-encode or not */
         int       bEncFocusedFramesOnly;
