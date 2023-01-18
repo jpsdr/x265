@@ -1773,25 +1773,13 @@ Quality, rate control and rate distortion options
 	keyframe interval specified. If unspecified, default keyframe interval will be used.
 	Default: disabled.
 
-.. option:: --aq-auto
+.. option:: --aq-auto <int>
 
-	Enable auto-AQ mode.
-	Default: disabled.
-
-.. option:: --aq-auto-hyst
-
-	To enable hysteresis on auto-AQ.
-	Default: disabled.
-
-.. option:: --aq-auto-aq5
-
-	Replace AQ-MODE 1 by AQ-MODE 5 on auto-AQ.
-	Default: disabled.
-
-.. option:: --aq-auto-hdr
-
-	Don't use biased mode on auto-AQ (--aq-auto-aq5 has no effect in this case).
-	Default: disabled.
+	Configure auto-AQ mode.
+	0: Disabled (default), <>0: Enabled.
+	Bit 1: If set to 1, enable hysteresis.
+	Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.
+	Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.
 
 .. option:: --aq-fast-edge
 
