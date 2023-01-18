@@ -1850,7 +1850,7 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
         preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc);
 
         /* Auto-AQ mode */
-        if (preFrame->m_param->rc.AQAuto)
+        if (preFrame->m_param->rc.AQAuto != 0)
             tld.calcAutoAQ(preFrame);
 
         if (m_lookahead.m_bAdaptiveQuant)
