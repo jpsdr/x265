@@ -1777,9 +1777,9 @@ Quality, rate control and rate distortion options
 
 	Configure auto-AQ mode.
 	0: Disabled (default), <>0: Enabled.
-	Bit 1: If set to 1, enable hysteresis.
-	Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.
-	Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.
+	  - Bit 1: If set to 1, enable hysteresis.
+	  - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.
+	  - Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.
 
 .. option:: --aq-fast-edge
 
