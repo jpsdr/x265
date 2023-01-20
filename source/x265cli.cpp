@@ -288,9 +288,9 @@ namespace X265_NS {
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
         H1("   --[no-]sbrc                   Enables the segment based rate control. Default %s\n", OPT(param->bEnableSBRC));
         H1("   --aq-auto                     Configure auto-AQ mode. Disabled %d (default), <>0 enabled\n", param->rc.AQAuto);
-        H1("                                 Bit 1: If set to 1, enable hysteresis.\n");
-        H1("                                 Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.\n");
-        H1("                                 Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.\n");
+        H1("                                   - Bit 1: If set to 1, enable hysteresis.\n");
+        H1("                                   - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.\n");
+        H1("                                   - Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.\n");
         H0("   --qg-size <int>               Specifies the size of the quantization group (64, 32, 16, 8). Default %d\n", param->rc.qgSize);
         H0("   --[no-]cutree                 Enable cutree for Adaptive Quantization. Default %s\n", OPT(param->rc.cuTree));
         H0("   --[no-]rc-grain               Enable ratecontrol mode to handle grains specifically. turned on with tune grain. Default %s\n", OPT(param->rc.bEnableGrain));
