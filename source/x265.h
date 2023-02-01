@@ -1679,8 +1679,16 @@ typedef struct x265_param
          * AQ is enabled. Default value: 1.0. Acceptable values between 0.0 and 3.0 */
         double    aqStrength;
 
+        /* Sets the strength of AQ for edge modes (4 & 5) only */
+        double    aqStrengthEdge;
+        bool      aqStrengthEdge_b;
+
         /* Sets the bias towards dark scenes in AQ modes 3 and 5. */
         double    aqBiasStrength;
+
+        /* Sets the bias towards dark scenes in AQ mode 5. */
+        double    aqBiasStrengthEdge;
+        bool      aqBiasStrengthEdge_b;
 
         /* Disable Gaussian blur in AQ modes 4 & 5. */
         int       aqFastEdge;
