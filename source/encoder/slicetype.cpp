@@ -574,9 +574,15 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                     }
                     avg_adj /= blockCount;
                     avg_adj_pow2 /= blockCount;
-                    strength = param->rc.aqStrength * avg_adj;
+                    if ((param->rc.aqMode == X265_AQ_EDGE) || (param->rc.aqMode == X265_AQ_EDGE_BIASED))
+                        strength = param->rc.aqStrengthEdge * avg_adj;
+                    else
+                        strength = param->rc.aqStrength * avg_adj;
                     avg_adj = avg_adj - 0.5f * (avg_adj_pow2 - modeTwoConst) / avg_adj;
-                    bias_strength = param->rc.aqBiasStrength * param->rc.aqStrength;
+                    if (param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                        bias_strength = param->rc.aqBiasStrengthEdge * param->rc.aqStrength;
+                    else
+                        bias_strength = param->rc.aqBiasStrength * param->rc.aqStrength;
                 }
                 else
                     strength = param->rc.aqStrength * 1.0397f;
