@@ -282,6 +282,10 @@ void x265_param_default(x265_param* param)
     param->rc.qgSize = 32;
     param->rc.aqStrength = 1.0;
     param->rc.aqBiasStrength = 1.0;
+    param->rc.aqStrengthEdge = 1.0;
+    param->rc.aqStrengthEdge_b = false;
+    param->rc.aqBiasStrengthEdge = 1.0;
+    param->rc.aqBiasStrengthEdge_b = false;
     param->rc.aqFastEdge = 0;
     param->rc.qpAdaptationRange = 1.0;
     param->rc.cuTree = 1;
@@ -439,6 +443,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->maxNumReferences = 1;
             param->limitReferences = 0;
             param->rc.aqStrength = 0.0;
+            param->rc.aqStrengthEdge = 0.0;
             param->rc.aqMode = X265_AQ_NONE;
             param->rc.hevcAq = 0;
             param->rc.qgSize = 32;
@@ -458,6 +463,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->maxNumReferences = 1;
             param->limitReferences = 0;
             param->rc.aqStrength = 0.0;
+            param->rc.aqStrengthEdge = 0.0;
             param->rc.aqMode = X265_AQ_NONE;
             param->rc.hevcAq = 0;
             param->rc.qgSize = 32;
@@ -592,6 +598,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         if (!strcmp(tune, "psnr"))
         {
             param->rc.aqStrength = 0.0;
+            param->rc.aqStrengthEdge = 0.0;
             param->psyRd = 0.0;
             param->psyRdoq = 0.0;
         }
@@ -641,6 +648,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->bframes = (param->bframes + 2) >= param->lookaheadDepth? param->bframes : param->bframes + 2;
             param->psyRd = 0.4;
             param->rc.aqStrength = 0.4;
+            param->rc.aqStrengthEdge = 0.4;
             param->deblockingFilterBetaOffset = 1;
             param->deblockingFilterTCOffset = 1;
         }
@@ -814,7 +822,17 @@ int x265_zone_param_parse(x265_param* p, const char* name, const char* value)
     }
     OPT("aq-mode") p->rc.aqMode = atoi(value);
     OPT("aq-strength") p->rc.aqStrength = atof(value);
+    OPT("aq-strength-edge")
+    {
+        p->rc.aqStrengthEdge = atof(value);
+        p->rc.aqStrengthEdge_b = true;
+    }
     OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
+    OPT("aq-bias-strength-edge")
+    {
+        p->rc.aqBiasStrengthEdge = atof(value);
+        p->rc.aqBiasStrengthEdge_b = true;
+    }
     OPT("aq-fast-edge") p->rc.aqFastEdge = atobool(value);
     OPT("nr-intra") p->noiseReductionIntra = atoi(value);
     OPT("nr-inter") p->noiseReductionInter = atoi(value);
@@ -1117,6 +1135,11 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     OPT("qblur") p->rc.qblur = atof(value);
     OPT("aq-mode") p->rc.aqMode = atoi(value);
     OPT("aq-strength") p->rc.aqStrength = atof(value);
+    OPT("aq-strength-edge")
+    {
+        p->rc.aqStrengthEdge = atof(value);
+        p->rc.aqStrengthEdge_b = true;
+    }
     OPT("vbv-maxrate") p->rc.vbvMaxBitrate = atoi(value);
     OPT("vbv-bufsize") p->rc.vbvBufferSize = atoi(value);
     OPT("vbv-init")    p->rc.vbvBufferInit = atof(value);
@@ -1446,6 +1469,11 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         /* Film grain characterstics model filename */
         OPT("film-grain") p->filmGrain = (char* )value;
         OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
+        OPT("aq-bias-strength-edge")
+        {
+            p->rc.aqBiasStrengthEdge = atof(value);
+            p->rc.aqBiasStrengthEdge_b = true;
+        }		
         OPT("aq-fast-edge") p->rc.aqFastEdge = atobool(value);
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
@@ -1700,6 +1728,10 @@ int x265_check_params(x265_param* param)
           "Aq-Mode is out of range");
     CHECK(param->rc.aqStrength < 0 || param->rc.aqStrength > 3,
           "Aq-Strength is out of range");
+    CHECK(param->rc.aqStrengthEdge < 0 || param->rc.aqStrengthEdge > 3,
+          "Aq-Strength-edge is out of range");
+    if (!param->rc.aqStrengthEdge_b) param->rc.aqStrengthEdge=param->rc.aqStrength;
+    if (!param->rc.aqBiasStrengthEdge_b) param->rc.aqBiasStrengthEdge=param->rc.aqBiasStrength;
     CHECK(param->rc.qpAdaptationRange < 1.0f || param->rc.qpAdaptationRange > 6.0f,
         "qp adaptation range is out of range");
     CHECK(param->deblockingFilterTCOffset < -6 || param->deblockingFilterTCOffset > 6,
@@ -2000,7 +2032,7 @@ void x265_print_params(x265_param* param)
 
     if (param->rc.aqMode && (param->rc.AQAuto == 0))
         x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree      : %d / %0.1f / %d / %d\n", param->rc.aqMode,
-            param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
+            ((param->rc.aqMode == X265_AQ_EDGE) || (param->rc.aqMode == X265_AQ_EDGE_BIASED)) ? param->rc.aqStrengthEdge:param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
     else if (param->rc.AQAuto != 0)
     {
         char str_aqauto[20];
@@ -2010,7 +2042,7 @@ void x265_print_params(x265_param* param)
         if (param->rc.AQAuto_hdr) strcat_s(str_aqauto, 20, "-hdr");
         if (param->rc.AQAuto_aq5) strcat_s(str_aqauto, 20, "-aq5");
 
-        x265_log(param, X265_LOG_INFO, "AQ: mode / str / qg-size / cu-tree      : %s / %0.1f / %d / %d\n", str_aqauto, param->rc.aqStrength, param->rc.qgSize, param->rc.cuTree);
+        x265_log(param, X265_LOG_INFO, "AQ: mode / str(edg) / qg-size / cu-tree : %s / %0.1f(%0.1f) / %d / %d\n", str_aqauto, param->rc.aqStrength, param->rc.aqStrengthEdge, param->rc.qgSize, param->rc.cuTree);
     }
 
     if (param->bLossless)
@@ -2267,7 +2299,9 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     }
     s += sprintf(s, " aq-mode=%d", p->rc.aqMode);
     s += sprintf(s, " aq-strength=%.2f", p->rc.aqStrength);
+    s += sprintf(s, " aq-strength-edge=%.2f", p->rc.aqStrengthEdge);
     s += sprintf(s, " aq-bias-strength=%.2f", p->rc.aqBiasStrength);
+    s += sprintf(s, " aq-bias-strength-edge=%.2f", p->rc.aqBiasStrengthEdge);
     BOOL(p->rc.aqFastEdge, "aq-fast-edge");
     BOOL(p->rc.cuTree, "cutree");
     s += sprintf(s, " zone-count=%d", p->rc.zoneCount);
@@ -2709,6 +2743,10 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->rc.aqMode = src->rc.aqMode;
     dst->rc.aqStrength = src->rc.aqStrength;
     dst->rc.aqBiasStrength = src->rc.aqBiasStrength;
+    dst->rc.aqStrengthEdge = src->rc.aqStrengthEdge;
+    dst->rc.aqBiasStrengthEdge = src->rc.aqBiasStrengthEdge;
+    dst->rc.aqStrengthEdge_b = src->rc.aqStrengthEdge_b;
+    dst->rc.aqBiasStrengthEdge_b = src->rc.aqBiasStrengthEdge_b;
     dst->rc.aqFastEdge = src->rc.aqFastEdge;
     dst->rc.vbvBufferSize = src->rc.vbvBufferSize;
     dst->rc.vbvMaxBitrate = src->rc.vbvMaxBitrate;
