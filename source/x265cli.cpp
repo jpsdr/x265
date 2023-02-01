@@ -283,6 +283,8 @@ namespace X265_NS {
         H0("   --[no-]hevc-aq                Mode for HEVC Adaptive Quantization. Default %s\n", OPT(param->rc.hevcAq));
         H0("   --aq-strength <float>         Reduces blocking and blurring in flat and textured areas (0 to 3.0). Default %.2f\n", param->rc.aqStrength);
         H0("   --aq-bias-strength <float>    Sets the bias to dark strength in AQ modes 3 and 5. Default %.2f\n", param->rc.aqBiasStrength);
+        H0("   --aq-strength-edge <float>    AQ-Strengh specific for edge modes 4 & 5 (0 to 3.0). Default aq-strength\n");
+        H0("   --aq-bias-strength-edge <float> Sets the bias for edge mode 5. Default aq-bias-strength\n");
         H0("   --aq-fast-edge                Disables Gaussian blur in AQ modes 4 & 5 edge detection. Default %s\n", OPT(param->rc.aqFastEdge));
         H0("   --qp-adaptation-range <float> Delta QP range by QP adaptation based on a psycho-visual model (1.0 to 6.0). Default %.2f\n", param->rc.qpAdaptationRange);
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
