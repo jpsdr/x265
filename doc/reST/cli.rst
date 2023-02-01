@@ -1760,22 +1760,37 @@ Quality, rate control and rate distortion options
 	Default 1.0.
 	**Range of values:** 0.0 to 3.0
 
+.. option:: --aq-strength-edge <float>
+	Adjust the strength of the adaptive quantization offsets only for
+	edge mode 4 and 5. 
+
+	Default aq-strength value.
+
 .. option:: --aq-bias-strength <float>
 
 	Adjust the strength of dark scene bias in AQ modes 3 and 5. Setting this
 	to 0 will disable the dark scene bias, meaning modes will be equivalent to
 	their unbiased counterparts (2 and 4).
+
 	Default 1.0.
+
+.. option:: --aq-bias-strength-edge <float>
+
+	Adjust the strength of dark scene bias in AQ mode 5.
+
+	Default aq-bias-strength value.
 
 .. option:: --sbrc --no-sbrc
 
 	To enable and disable segment based rate control.Segment duration depends on the
 	keyframe interval specified. If unspecified, default keyframe interval will be used.
+
 	Default: disabled.
 
 .. option:: --aq-auto <int>
 
 	Configure auto-AQ mode.
+
 	0: Disabled (default), <>0: Enabled.
 	  - Bit 1: If set to 1, enable hysteresis.
 	  - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.
