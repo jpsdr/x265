@@ -1,0 +1,1 @@
+-Ofast -mavx2 -march=broadwell
