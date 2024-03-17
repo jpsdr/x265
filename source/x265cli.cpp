@@ -38,7 +38,7 @@ namespace X265_NS {
 
     static void printVersion(x265_param *param, const x265_api* api)
     {
-        x265_log(param, X265_LOG_INFO, "HEVC encoder version %s [Mod by Patman]\n", api->version_str);
+        x265_log(param, X265_LOG_INFO, "HEVC encoder version %s [Mod by JPSDR using Mod by Patman]\n", api->version_str);
         x265_log(param, X265_LOG_INFO, "build info %s\n", api->build_info_str);
     }
 
@@ -57,6 +57,7 @@ namespace X265_NS {
 #ifdef ENABLE_VAPOURSYNTH
         x265_extra_readers += "VPY, ";
 #endif
+
 
         H0("\nSyntax: x265 [options] infile [-o] outfile\n");
         H0("    infile can be %sYUV or Y4M\n", x265_extra_readers.c_str());
@@ -131,7 +132,7 @@ namespace X265_NS {
         H0("-p/--preset <string>             Trade off performance for compression efficiency. Default medium\n");
         H0("                                 ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, or placebo\n");
         H0("-t/--tune <string>               Tune the settings for a particular type of source or situation:\n");
-        H0("                                 psnr, ssim, grain, zerolatency, fastdecode\n");
+        H0("                                 psnr, ssim, grain, zerolatency, fastdecode, animation\n");
         H0("\nQuad-Tree size and depth:\n");
         H0("-s/--ctu <64|32|16>              Maximum CU size (WxH). Default %d\n", param->maxCUSize);
         H0("   --min-cu-size <64|32|16|8>    Minimum CU size (WxH). Default %d\n", param->minCUSize);
@@ -279,7 +280,19 @@ namespace X265_NS {
             "                                    - 0 : Disabled.\n"
             "                                    - 1 : Store/Load ctu distortion to/from the file specified in analysis-save/load.\n"
             "                                Default 0 - Disabled\n");
-        H0("   --aq-mode <integer>           Mode for Adaptive Quantization - 0:none 1:uniform AQ 2:auto variance 3:auto variance with bias to dark scenes 4:auto variance with edge information 5:auto variance with edge information and bias to dark scenes. Default %d\n", param->rc.aqMode);
+        H0("   --aq-mode <integer>           Mode for Adaptive Quantization.\n"
+            "                                    - 0 : none.\n"
+            "                                    - 1 : uniform AQ.\n"
+            "                                    - 2 : auto variance.\n"
+            "                                    - 3 : auto variance with bias to dark scenes.\n"
+            "                                    - 4 : auto variance with edge information.\n"
+            "                                    - 5 : auto variance with edge density and bias towards dark scenes.\n"
+            "                                Default:%d\n", param->rc.aqMode);
+        H0("   --aq-auto                     Configure auto-AQ mode, automatically decides the AQ Mode for each frame, using its scene statistics, such as luma intensity and edge density.\n"
+            "                                   - Bit 1: If set to 1, enable hysteresis.\n"
+            "                                   - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.\n"
+            "                                   - Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.\n"
+            "                                Disabled %d (default), <>0 enabled\n", param->rc.AQAuto);
         H0("   --[no-]hevc-aq                Mode for HEVC Adaptive Quantization. Default %s\n", OPT(param->rc.hevcAq));
         H0("   --aq-strength <float>         Reduces blocking and blurring in flat and textured areas (0 to 3.0). Default %.2f\n", param->rc.aqStrength);
         H0("   --aq-bias-strength <float>    Sets the bias to dark strength in AQ modes 3 and 5. Default %.2f\n", param->rc.aqBiasStrength);
@@ -289,10 +302,6 @@ namespace X265_NS {
         H0("   --qp-adaptation-range <float> Delta QP range by QP adaptation based on a psycho-visual model (1.0 to 6.0). Default %.2f\n", param->rc.qpAdaptationRange);
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
         H1("   --[no-]sbrc                   Enables the segment based rate control. Default %s\n", OPT(param->bEnableSBRC));
-        H1("   --aq-auto                     Configure auto-AQ mode. Disabled %d (default), <>0 enabled\n", param->rc.AQAuto);
-        H1("                                   - Bit 1: If set to 1, enable hysteresis.\n");
-        H1("                                   - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.\n");
-        H1("                                   - Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.\n");
         H0("   --qg-size <int>               Specifies the size of the quantization group (64, 32, 16, 8). Default %d\n", param->rc.qgSize);
         H0("   --[no-]cutree                 Enable cutree for Adaptive Quantization. Default %s\n", OPT(param->rc.cuTree));
         H0("   --[no-]rc-grain               Enable ratecontrol mode to handle grains specifically. turned on with tune grain. Default %s\n", OPT(param->rc.bEnableGrain));

@@ -39,19 +39,19 @@ typedef struct
 	   as the avisynth header does not compensate for this type of usage */
 	struct
 	{
-		const char *(__stdcall *avs_clip_get_error)( AVS_Clip *clip );
-		AVS_ScriptEnvironment *(__stdcall *avs_create_script_environment)( int version );
-		void (__stdcall *avs_delete_script_environment)( AVS_ScriptEnvironment *env );
-		AVS_VideoFrame *(__stdcall *avs_get_frame)( AVS_Clip *clip, int n );
-		int (__stdcall *avs_get_version)( AVS_Clip *clip );
-		const AVS_VideoInfo *(__stdcall *avs_get_video_info)( AVS_Clip *clip );
-		int (__stdcall *avs_function_exists)( AVS_ScriptEnvironment *env, const char *name );
-		AVS_Value (__stdcall *avs_invoke)( AVS_ScriptEnvironment *env, const char *name,
-			AVS_Value args, const char **arg_names );
-		void (__stdcall *avs_release_clip)( AVS_Clip *clip );
-		void (__stdcall *avs_release_value)( AVS_Value value );
-		void (__stdcall *avs_release_video_frame)( AVS_VideoFrame *frame );
-		AVS_Clip *(__stdcall *avs_take_clip)( AVS_Value, AVS_ScriptEnvironment *env );
+        const char *(__stdcall *avs_clip_get_error)( AVS_Clip *clip );
+        AVS_ScriptEnvironment *(__stdcall *avs_create_script_environment)( int version );
+        void (__stdcall *avs_delete_script_environment)( AVS_ScriptEnvironment *env );
+        AVS_VideoFrame *(__stdcall *avs_get_frame)( AVS_Clip *clip, int n );
+        int (__stdcall *avs_get_version)( AVS_Clip *clip );
+        const AVS_VideoInfo *(__stdcall *avs_get_video_info)( AVS_Clip *clip );
+        int (__stdcall *avs_function_exists)( AVS_ScriptEnvironment *env, const char *name );
+        AVS_Value (__stdcall *avs_invoke)( AVS_ScriptEnvironment *env, const char *name,
+        AVS_Value args, const char **arg_names );
+        void (__stdcall *avs_release_clip)( AVS_Clip *clip );
+        void (__stdcall *avs_release_value)( AVS_Value value );
+        void (__stdcall *avs_release_video_frame)( AVS_VideoFrame *frame );
+        AVS_Clip *(__stdcall *avs_take_clip)( AVS_Value, AVS_ScriptEnvironment *env );
         int (__stdcall *avs_is_y8)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_420)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_422)(const AVS_VideoInfo * p);
