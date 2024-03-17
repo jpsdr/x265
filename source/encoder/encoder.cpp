@@ -72,7 +72,8 @@ DolbyVisionProfileSpec dovi[] =
 {
     { 1, 1, 1, 1, 1, 5, 1,  2, 2, 2, 50 },
     { 1, 1, 1, 1, 1, 5, 0, 16, 9, 9, 81 },
-    { 1, 1, 1, 1, 1, 5, 0,  1, 1, 1, 82 }
+    { 1, 1, 1, 1, 1, 5, 0,  1, 1, 1, 82 },
+    { 1, 1, 1, 1, 1, 5, 0, 18, 9, 9, 84 }
 };
 
 typedef struct
@@ -3939,11 +3940,10 @@ void Encoder::configure(x265_param *p)
 
     if (p->bEnableTemporalSubLayers > 2)
     {
-        if (p->bFrameAdaptive)
-        {
+        if (!p->bFrameAdaptive)
             x265_log(p, X265_LOG_WARNING, "Disabling adaptive B-frame placement to support temporal sub-layers\n");
-            p->bFrameAdaptive = 0;
-        }
+
+        p->bFrameAdaptive = 0;
     }
 
     m_bframeDelay = p->bframes ? (p->bBPyramid ? 2 : 1) : 0;
