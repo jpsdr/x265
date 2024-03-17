@@ -1136,11 +1136,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     OPT("qblur") p->rc.qblur = atof(value);
     OPT("aq-mode") p->rc.aqMode = atoi(value);
     OPT("aq-strength") p->rc.aqStrength = atof(value);
-    OPT("aq-strength-edge")
-    {
-        p->rc.aqStrengthEdge = atof(value);
-        p->rc.aqStrengthEdge_b = true;
-    }
     OPT("vbv-maxrate") p->rc.vbvMaxBitrate = atoi(value);
     OPT("vbv-bufsize") p->rc.vbvBufferSize = atoi(value);
     OPT("vbv-init")    p->rc.vbvBufferInit = atof(value);
@@ -1312,6 +1307,18 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("multi-pass-opt-analysis") p->analysisMultiPassRefine = atobool(value);
         OPT("multi-pass-opt-distortion") p->analysisMultiPassDistortion = atobool(value);
         OPT("aq-motion") p->bAQMotion = atobool(value);
+        OPT("aq-strength-edge")
+        {
+            p->rc.aqStrengthEdge = atof(value);
+            p->rc.aqStrengthEdge_b = true;
+        }
+        OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
+        OPT("aq-bias-strength-edge")
+        {
+            p->rc.aqBiasStrengthEdge = atof(value);
+            p->rc.aqBiasStrengthEdge_b = true;
+        }		
+        OPT("aq-fast-edge") p->rc.aqFastEdge = atobool(value);
         OPT("aq-auto")
         {
             p->rc.AQAuto = atoi(value);
@@ -1470,13 +1477,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("eos") p->bEnableEndOfSequence = atobool(value);
         /* Film grain characterstics model filename */
         OPT("film-grain") p->filmGrain = (char* )value;
-        OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
-        OPT("aq-bias-strength-edge")
-        {
-            p->rc.aqBiasStrengthEdge = atof(value);
-            p->rc.aqBiasStrengthEdge_b = true;
-        }		
-        OPT("aq-fast-edge") p->rc.aqFastEdge = atobool(value);
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
         else
