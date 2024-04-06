@@ -1,2 +1,3 @@
+-Ofast -msse2
 -Ofast -mavx
 -Ofast -mavx2 -mfma -march=broadwell
