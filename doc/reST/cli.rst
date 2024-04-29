@@ -1331,7 +1331,7 @@ Temporal / motion search options
 	
 .. option:: --mcstf, --no-mcstf
 
-    Enable Motion Compensated Temporal filtering.
+    Enable Motion-Compensated Spatio-Temporal Filtering.
 	Default: disabled
 
 Spatial/intra options
@@ -1610,6 +1610,10 @@ Slice decision options
 
 	Detect and handle fade-in regions. Default disabled.
 
+.. option:: --cra-nal
+
+	Force NAL type to CRA to all the frames expect for the first frame, works only with :option:`--keyint` is 1.
+
 Quality, rate control and rate distortion options
 =================================================
 
@@ -1782,10 +1786,7 @@ Quality, rate control and rate distortion options
 
 .. option:: --sbrc --no-sbrc
 
-	To enable and disable segment based rate control.Segment duration depends on the
-	keyframe interval specified. If unspecified, default keyframe interval will be used.
-
-	Default: disabled.
+	Default: disabled. **Experimental Feature**
 
 .. option:: --aq-auto <int>
 
@@ -2743,7 +2744,7 @@ Bitstream options
 
 .. option:: --film-grain <filename>
 
-    Refers to the film grain model characteristics for signal enhancement information transmission
+    Refers to the film grain model characteristics for signal enhancement information transmission.
 
     **CLI_ONLY**
 
