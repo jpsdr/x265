@@ -37,7 +37,7 @@ struct VSSCRIPTAPI {
     /* Convenience function for retrieving a VSAPI pointer without having to use the VapourSynth library. Always pass VAPOURSYNTH_API_VERSION */
     const VSAPI *(VS_CC *getVSAPI)(int version) VS_NOEXCEPT;
 
-    /*
+    /* 
     * Providing a pre-created core is useful for setting core creation flags, log callbacks, preload specific plugins and many other things.
     * You must create a VSScript object before evaluating a script. Always takes ownership of the core even on failure. Returns NULL on failure.
     * Pass NULL to have a core automatically created with the default options.
@@ -50,9 +50,9 @@ struct VSSCRIPTAPI {
     /*
     * Evaluates a script passed in the buffer argument. The scriptFilename is only used for display purposes. in Python
     * it means that the main module won't be unnamed in error messages.
-    *
+    * 
     * Returns 0 on success.
-    *
+    * 
     * Note that calling any function other than getError() and freeScript() on a VSScript object in the error state
     * will result in undefined behavior.
     */

@@ -26,7 +26,11 @@
 
 #define VS_MAKE_VERSION(major, minor) (((major) << 16) | (minor))
 #define VAPOURSYNTH_API_MAJOR 4
+#if defined(VS_USE_LATEST_API) || defined(VS_USE_API_41)
+#define VAPOURSYNTH_API_MINOR 1
+#else
 #define VAPOURSYNTH_API_MINOR 0
+#endif
 #define VAPOURSYNTH_API_VERSION VS_MAKE_VERSION(VAPOURSYNTH_API_MAJOR, VAPOURSYNTH_API_MINOR)
 
 #define VS_AUDIO_FRAME_SAMPLES 3072
@@ -268,7 +272,7 @@ typedef enum VSActivationReason {
 
 typedef enum VSMessageType {
     mtDebug = 0,
-    mtInformation = 1,
+    mtInformation = 1, 
     mtWarning = 2,
     mtCritical = 3,
     mtFatal = 4 /* also terminates the process, should generally not be used by normal filters */
@@ -293,7 +297,11 @@ typedef enum VSDataTypeHint {
 typedef enum VSRequestPattern {
     rpGeneral = 0, /* General pattern */
     rpNoFrameReuse = 1, /* When requesting all output frames from the filter no frame will be requested more than once from this input clip, never requests frames beyond the end of the clip */
-    rpStrictSpatial = 2 /* Always (and only) requests frame n from input clip when generating output frame n, never requests frames beyond the end of the clip */
+    rpStrictSpatial = 2 /* Always (and only) requests frame n from the input clip when generating output frame n, never requests frames beyond the end of the clip */
+#if VAPOURSYNTH_API_MINOR >= 1   
+    ,
+    rpFrameReuseLastOnly = 3 /* Added in API 4.1, This modes is basically identical rpNoFrameReuse except that it hints the last frame may be requested multiple times */
+#endif
 } VSRequestPattern;
 
 typedef enum VSCacheMode {
@@ -317,11 +325,11 @@ typedef void (VS_CC *VSFrameDoneCallback)(void *userData, const VSFrame *f, int 
 typedef void (VS_CC *VSLogHandler)(int msgType, const char *msg, void *userData);
 typedef void (VS_CC *VSLogHandlerFree)(void *userData);
 
-struct VSPLUGINAPI {
+typedef struct VSPLUGINAPI {
     int (VS_CC *getAPIVersion)(void) VS_NOEXCEPT; /* returns VAPOURSYNTH_API_VERSION of the library */
     int (VS_CC *configPlugin)(const char *identifier, const char *pluginNamespace, const char *name, int pluginVersion, int apiVersion, int flags, VSPlugin *plugin) VS_NOEXCEPT; /* use the VS_MAKE_VERSION macro for pluginVersion */
     int (VS_CC *registerFunction)(const char *name, const char *args, const char *returnType, VSPublicFunction argsFunc, void *functionData, VSPlugin *plugin) VS_NOEXCEPT; /* non-zero return value on success  */
-};
+} VSPLUGINAPI;
 
 typedef struct VSFilterDependency {
     VSNode *source;
@@ -454,7 +462,7 @@ struct VSAPI {
     /* Core and information */
     VSCore *(VS_CC *createCore)(int flags) VS_NOEXCEPT; /* flags uses the VSCoreCreationFlags enum */
     void (VS_CC *freeCore)(VSCore *core) VS_NOEXCEPT; /* only call this function after all node, frame and function references belonging to the core have been freed */
-    int64_t(VS_CC *setMaxCacheSize)(int64_t bytes, VSCore *core) VS_NOEXCEPT; /* the total cache size at which vapoursynth more aggressively tries to reclaim memory, it is not a hard limit */
+    int64_t (VS_CC *setMaxCacheSize)(int64_t bytes, VSCore *core) VS_NOEXCEPT; /* the total cache size at which vapoursynth more aggressively tries to reclaim memory, it is not a hard limit */
     int (VS_CC *setThreadCount)(int threads, VSCore *core) VS_NOEXCEPT; /* setting threads to 0 means automatic detection */
     void (VS_CC *getCoreInfo)(VSCore *core, VSCoreInfo *info) VS_NOEXCEPT;
     int (VS_CC *getAPIVersion)(void) VS_NOEXCEPT;
@@ -463,11 +471,28 @@ struct VSAPI {
     void (VS_CC *logMessage)(int msgType, const char *msg, VSCore *core) VS_NOEXCEPT;
     VSLogHandle *(VS_CC *addLogHandler)(VSLogHandler handler, VSLogHandlerFree free, void *userData, VSCore *core) VS_NOEXCEPT; /* free and userData can be NULL, returns a handle that can be passed to removeLogHandler */
     int (VS_CC *removeLogHandler)(VSLogHandle *handle, VSCore *core) VS_NOEXCEPT; /* returns non-zero if successfully removed */
+    
+    /* Added in API 4.1, mostly graph and node inspection, PLEASE DON'T USE INSIDE FILTERS */
+#if VAPOURSYNTH_API_MINOR >= 1
+    /* Additional cache management to free memory */
+    void (VS_CC *clearNodeCache)(VSNode *node) VS_NOEXCEPT; /* clears the cache of the specified node */
+    void (VS_CC *clearCoreCaches)(VSCore *core) VS_NOEXCEPT; /* clears all caches belonging to the specified core */
 
-#ifdef VS_GRAPH_API
-    /* Graph information */
+    /* Basic node information */
+    const char *(VS_CC *getNodeName)(VSNode *node) VS_NOEXCEPT; /* the name passed to create*Filter */
+    int (VS_CC *getNodeFilterMode)(VSNode *node) VS_NOEXCEPT; /* returns VSFilterMode */
+    int (VS_CC *getNumNodeDependencies)(VSNode *node) VS_NOEXCEPT;
+    const VSFilterDependency *(VS_CC *getNodeDependency)(VSNode *node, int index) VS_NOEXCEPT;
 
-    /*
+    /* Node timing functions */
+    int (VS_CC *getCoreNodeTiming)(VSCore *core) VS_NOEXCEPT; /* non-zero when filter timing is enabled */
+    void (VS_CC *setCoreNodeTiming)(VSCore *core, int enable) VS_NOEXCEPT; /* non-zero enables filter timing, note that disabling simply stops the counters from incrementing */
+    int64_t (VS_CC *getNodeProcessingTime)(VSNode *node, int reset) VS_NOEXCEPT; /* time spent processing frames in nanoseconds, reset sets the counter to 0 again */
+    int64_t (VS_CC *getFreedNodeProcessingTime)(VSCore *core, int reset) VS_NOEXCEPT; /* time spent processing frames in nanoseconds in all destroyed nodes, reset sets the counter to 0 again */
+
+#if defined(VS_GRAPH_API)
+    /* !!! Experimental/expensive graph information, these function require both the major and minor version to match exactly when using them !!!
+     * 
      * These functions only exist to retrieve internal details for debug purposes and graph visualization
      * They will only only work properly when used on a core created with ccfEnableGraphInspection and are
      * not safe to use concurrently with frame requests or other API functions. Because of this they are
@@ -476,11 +501,7 @@ struct VSAPI {
 
     const char *(VS_CC *getNodeCreationFunctionName)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns the name of the function that created the filter, specifying a higher level will retrieve the function above that invoked it or NULL if a non-existent level is requested */
     const VSMap *(VS_CC *getNodeCreationFunctionArguments)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns a copy of the arguments passed to the function that created the filter, returns NULL if a non-existent level is requested */
-    const char *(VS_CC *getNodeName)(VSNode *node) VS_NOEXCEPT; /* the name passed to create*Filter */
-    int (VS_CC *getNodeFilterMode)(VSNode *node) VS_NOEXCEPT; /* VSFilterMode */
-    int64_t (VS_CC *getNodeFilterTime)(VSNode *node) VS_NOEXCEPT; /* time spent processing frames in nanoseconds */
-    const VSFilterDependency *(VS_CC *getNodeDependencies)(VSNode *node) VS_NOEXCEPT;
-    int (VS_CC *getNumNodeDependencies)(VSNode *node) VS_NOEXCEPT;
+#endif
 #endif
 };
 
