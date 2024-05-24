@@ -190,10 +190,10 @@ int main(int argc, char *argv[])
         else
             continue;
 
-#if X265_ARCH_X86
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
         EncoderPrimitives vecprim;
         memset(&vecprim, 0, sizeof(vecprim));
-        setupInstrinsicPrimitives(vecprim, test_arch[i].flag);
+        setupIntrinsicPrimitives(vecprim, test_arch[i].flag);
         setupAliasPrimitives(vecprim);
         for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
         {
@@ -231,8 +231,8 @@ int main(int argc, char *argv[])
 
     EncoderPrimitives optprim;
     memset(&optprim, 0, sizeof(optprim));
-#if X265_ARCH_X86
-    setupInstrinsicPrimitives(optprim, cpuid);
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
+    setupIntrinsicPrimitives(optprim, cpuid);
 #endif
 
     setupAssemblyPrimitives(optprim, cpuid);
