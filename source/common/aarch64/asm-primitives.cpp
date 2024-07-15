@@ -689,6 +689,7 @@ extern "C" {
 #include "dct-prim.h"
 #include "loopfilter-prim.h"
 #include "intrapred-prim.h"
+#include "sao-prim.h"
 
 namespace X265_NS
 {
@@ -1949,7 +1950,14 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
         setupDCTPrimitives_neon(p);
         setupLoopFilterPrimitives_neon(p);
         setupIntraPrimitives_neon(p);
+        setupSaoPrimitives_neon(p);
     }
+#if defined(HAVE_SVE) && HAVE_SVE_BRIDGE
+    if (cpuMask & X265_CPU_SVE)
+    {
+        setupSaoPrimitives_sve(p);
+    }
+#endif
 }
 
 } // namespace X265_NS

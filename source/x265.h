@@ -2295,6 +2295,7 @@ typedef struct x265_param
 
     /*SBRC*/
     int      bEnableSBRC;
+    int mcstfFrameRange;
 } x265_param;
 
 /* x265_param_alloc:
