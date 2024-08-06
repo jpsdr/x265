@@ -166,6 +166,9 @@ public:
     int8_t                 m_gopId;
     bool                   m_sameLayerRefPic;
 
+    int                    m_sLayerId;
+    bool                   m_valid;
+
     Frame();
 
     bool create(x265_param *param, float* quantOffsets);

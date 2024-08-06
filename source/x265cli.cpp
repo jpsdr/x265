@@ -414,6 +414,9 @@ namespace X265_NS {
         H0("   --[no-]frame-dup              Enable Frame duplication. Default %s\n", OPT(param->bEnableFrameDuplication));
         H0("   --dup-threshold <integer>     PSNR threshold for Frame duplication. Default %d\n", param->dupThreshold);
         H0("   --[no-]mcstf                  Enable GOP based temporal filter. Default %d\n", param->bEnableTemporalFilter);
+#if ENABLE_ALPHA
+        H0("   --alpha                       Enable alpha channel support. Default %d\n", param->bEnableAlpha);
+#endif
 #ifdef SVT_HEVC
         H0("   --[no]svt                     Enable SVT HEVC encoder %s\n", OPT(param->bEnableSvtHevc));
         H0("   --[no-]svt-hme                Enable Hierarchial motion estimation(HME) in SVT HEVC encoder \n");
@@ -459,9 +462,12 @@ namespace X265_NS {
         if (input)
             input->release();
         input = NULL;
-        if (recon)
-            recon->release();
-        recon = NULL;
+        for (int i = 0; i < MAX_SCALABLE_LAYERS; i++)
+        {
+            if (recon[i])
+                recon[i]->release();
+            recon[i] = NULL;
+        }
         if (qpfile)
             fclose(qpfile);
         qpfile = NULL;
@@ -644,7 +650,7 @@ namespace X265_NS {
         int outputBitDepth = 0;
         int reconFileBitDepth = 0;
         const char *inputfn = NULL;
-        const char *reconfn = NULL;
+        const char* reconfn[MAX_SCALABLE_LAYERS] = { NULL };
         const char *outputfn = NULL;
         const char *preset = NULL;
         const char *tune = NULL;
@@ -784,7 +790,7 @@ namespace X265_NS {
                 OPT("no-progress") this->bProgress = false;
                 OPT("output") outputfn = optarg;
                 OPT("input") inputfn = optarg;
-                OPT("recon") reconfn = optarg;
+                OPT("recon") reconfn[0] = optarg;
                 OPT("input-depth") inputBitDepth = (uint32_t)x265_atoi(optarg, bError);
                 OPT("dither") this->bDither = true;
                 OPT("recon-depth") reconFileBitDepth = (uint32_t)x265_atoi(optarg, bError);
@@ -902,7 +908,7 @@ namespace X265_NS {
         /* pass readerOpts to InputFileInfo in case certain reader wants it */
         info.readerOpts = this->readerOpts;
 
-        this->input = InputFile::open(info, this->bForceY4m);
+        this->input = InputFile::open(info, this->bForceY4m, param->bEnableAlpha);
         if (!this->input || this->input->isFail())
         {
             x265_log_file(param, X265_LOG_ERROR, "unable to open input file <%s>\n", inputfn);
@@ -983,23 +989,40 @@ namespace X265_NS {
 
         this->input->startReader();
 
-        if (reconfn)
+        if (reconfn[0])
         {
             if (reconFileBitDepth == 0)
                 reconFileBitDepth = param->internalBitDepth;
-            this->recon = ReconFile::open(reconfn, param->sourceWidth, param->sourceHeight, reconFileBitDepth,
-                param->fpsNum, param->fpsDenom, param->internalCsp, param->sourceBitDepth);
-            if (this->recon->isFail())
+#if ENABLE_ALPHA
+            if (param->bEnableAlpha)
             {
-                x265_log(param, X265_LOG_WARNING, "unable to write reconstructed outputs file\n");
-                this->recon->release();
-                this->recon = 0;
+                char* temp = new char[strlen(reconfn[0])];
+                strcpy(temp, reconfn[0]);
+                const char* token = strtok(temp, ".");
+                for (int view = 0; view < param->numScalableLayers; view++)
+                {
+                    char* buf = new char[strlen(temp) + 7];
+                    sprintf(buf, "%s-%d.yuv", token, view);
+                    reconfn[view] = buf;
+                }
             }
-            else
-                general_log(param, this->recon->getName(), X265_LOG_INFO,
-                "reconstructed images %dx%d fps %d/%d %s\n",
-                param->sourceWidth, param->sourceHeight, param->fpsNum, param->fpsDenom,
-                x265_source_csp_names[param->internalCsp]);
+#endif
+            for (int i = 0; i < param->numScalableLayers; i++)
+            {
+                this->recon[i] = ReconFile::open(reconfn[i], param->sourceWidth, param->sourceHeight, reconFileBitDepth,
+                    param->fpsNum, param->fpsDenom, param->internalCsp, param->sourceBitDepth);
+                if (this->recon[i]->isFail())
+                {
+                    x265_log(param, X265_LOG_WARNING, "unable to write reconstructed outputs file\n");
+                    this->recon[i]->release();
+                    this->recon[i] = 0;
+                }
+                else
+                    general_log(param, this->recon[i]->getName(), X265_LOG_INFO,
+                        "reconstructed images %dx%d fps %d/%d %s\n",
+                        param->sourceWidth, param->sourceHeight, param->fpsNum, param->fpsDenom,
+                        x265_source_csp_names[param->internalCsp]);
+            }
         }
 #if ENABLE_LIBVMAF
         if (!reconfn)

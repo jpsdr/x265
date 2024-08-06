@@ -33,12 +33,12 @@
 
 using namespace X265_NS;
 
-InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m)
+InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m, bool alpha)
 {
     const char * s = strrchr(info.filename, '.');
 
     if (bForceY4m || (s && !strcmp(s, ".y4m")))
-        return new Y4MInput(info);
+        return new Y4MInput(info, alpha);
 #ifdef ENABLE_AVISYNTH
     else if (s && !strcmp(s, ".avs"))
         return new AVSInput(info);
@@ -48,5 +48,5 @@ InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m)
         return new VPYInput(info);
 #endif
     else
-        return new YUVInput(info);
+        return new YUVInput(info, alpha);
 }

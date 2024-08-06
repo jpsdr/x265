@@ -186,7 +186,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
     // will detect and set profile/tier/level in VPS
     determineLevel(*param, encoder->m_vps);
 
-    if (!param->bAllowNonConformance && encoder->m_vps.ptl.profileIdc == Profile::NONE)
+    if (!param->bAllowNonConformance && encoder->m_vps.ptl.profileIdc[0] == Profile::NONE)
     {
         x265_log(param, X265_LOG_INFO, "non-conformant bitstreams not allowed (--allow-non-conformance)\n");
         goto fail;
@@ -358,11 +358,11 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
             VPS saveVPS;
             memcpy(&saveVPS.ptl, &encoder->m_vps.ptl, sizeof(saveVPS.ptl));
             determineLevel(*encoder->m_latestParam, encoder->m_vps);
-            if (saveVPS.ptl.profileIdc != encoder->m_vps.ptl.profileIdc || saveVPS.ptl.levelIdc != encoder->m_vps.ptl.levelIdc
+            if (saveVPS.ptl.profileIdc[0] != encoder->m_vps.ptl.profileIdc[0] || saveVPS.ptl.levelIdc != encoder->m_vps.ptl.levelIdc
                 || saveVPS.ptl.tierFlag != encoder->m_vps.ptl.tierFlag)
             {
                 x265_log(encoder->m_param, X265_LOG_WARNING, "Profile/Level/Tier has changed from %d/%d/%s to %d/%d/%s.Cannot reconfigure rate-control.\n",
-                         saveVPS.ptl.profileIdc, saveVPS.ptl.levelIdc, saveVPS.ptl.tierFlag ? "High" : "Main", encoder->m_vps.ptl.profileIdc,
+                         saveVPS.ptl.profileIdc[0], saveVPS.ptl.levelIdc, saveVPS.ptl.tierFlag ? "High" : "Main", encoder->m_vps.ptl.profileIdc[0],
                          encoder->m_vps.ptl.levelIdc, encoder->m_vps.ptl.tierFlag ? "High" : "Main");
                 x265_copy_params(encoder->m_latestParam, &save);
                 memcpy(&encoder->m_vps.ptl, &saveVPS.ptl, sizeof(saveVPS.ptl));
@@ -407,7 +407,7 @@ int x265_encoder_reconfig_zone(x265_encoder* enc, x265_zone* zone_in)
     return 0;
 }
 
-int x265_encoder_encode(x265_encoder *enc, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture *pic_out)
+int x265_encoder_encode(x265_encoder *enc, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out)
 {
     if (!enc)
         return -1;
@@ -603,7 +603,10 @@ fail:
         *pi_nal = 0;
 
     if (numEncoded && encoder->m_param->csvLogLevel && encoder->m_outputCount >= encoder->m_latestParam->chunkStart)
-        x265_csvlog_frame(encoder->m_param, pic_out);
+    {
+        for (int layer = 0; layer < encoder->m_param->numScalableLayers; layer++)
+            x265_csvlog_frame(encoder->m_param, pic_out[layer]);
+    }
 
     if (numEncoded < 0)
         encoder->m_aborted = true;
@@ -654,11 +657,14 @@ void x265_encoder_log(x265_encoder* enc, int argc, char **argv)
     if (enc)
     {
         Encoder *encoder = static_cast<Encoder*>(enc);
-        x265_stats stats;       
-        encoder->fetchStats(&stats, sizeof(stats));
+        x265_stats stats[MAX_SCALABLE_LAYERS];
         int padx = encoder->m_sps.conformanceWindow.rightOffset;
         int pady = encoder->m_sps.conformanceWindow.bottomOffset;
-        x265_csvlog_encode(encoder->m_param, &stats, padx, pady, argc, argv);
+        for (int layer = 0; layer < encoder->m_param->numScalableLayers; layer++)
+        {
+            encoder->fetchStats(stats, sizeof(stats[layer]), layer);
+            x265_csvlog_encode(encoder->m_param, &stats[0], padx, pady, argc, argv);
+        }
     }
 }
 
@@ -745,7 +751,7 @@ int x265_get_slicetype_poc_and_scenecut(x265_encoder *enc, int *slicetype, int *
     if (!enc)
         return -1;
     Encoder *encoder = static_cast<Encoder*>(enc);
-    if (!encoder->copySlicetypePocAndSceneCut(slicetype, poc, sceneCut))
+    if (!encoder->copySlicetypePocAndSceneCut(slicetype, poc, sceneCut, 0))
         return 0;
     return -1;
 }
@@ -1296,7 +1302,7 @@ FILE* x265_csvlog_open(const x265_param* param)
         {
             if (param->csvLogLevel)
             {
-                fprintf(csvfp, "Encode Order, Type, POC, QP, Bits, Scenecut, ");
+                fprintf(csvfp, "Layer , Encode Order, Type, POC, QP, Bits, Scenecut, ");
                 if (!!param->bEnableTemporalSubLayers)
                     fprintf(csvfp, "Temporal Sub Layer ID, ");
                 if (param->csvLogLevel >= 2)
@@ -1410,7 +1416,7 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
         return;
 
     const x265_frame_stats* frameStats = &pic->frameData;
-    fprintf(param->csvfpt, "%d, %c-SLICE, %4d, %2.2lf, %10d, %d,", frameStats->encoderOrder, frameStats->sliceType, frameStats->poc,
+    fprintf(param->csvfpt, "%d, %d, %c-SLICE, %4d, %2.2lf, %10d, %d,", pic->layerID, frameStats->encoderOrder, frameStats->sliceType, frameStats->poc,
                                                                    frameStats->qp, (int)frameStats->bits, frameStats->bScenecut);
     if (!!param->bEnableTemporalSubLayers)
         fprintf(param->csvfpt, "%d,", frameStats->tLayer);

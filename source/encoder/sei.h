@@ -38,7 +38,7 @@ class SEI : public SyntaxElementWriter
 public:
     /* SEI users call writeSEImessages() to marshal an SEI to a bitstream.
     * The writeSEImessages() method calls writeSEI() which encodes the header */
-    void writeSEImessages(Bitstream& bs, const SPS& sps, NalUnitType nalUnitType, NALList& list, int isNested);
+    void writeSEImessages(Bitstream& bs, const SPS& sps, NalUnitType nalUnitType, NALList& list, int isNested, int layerId = 0);
     void setSize(uint32_t size);
     static char* base64Decode(char encodedString[], int base64EncodeLength);
     virtual ~SEI() {}
@@ -188,6 +188,41 @@ public:
             WRITE_CODE(m_userData[i], 8, "user_data");
     }
 };
+
+#if ENABLE_ALPHA
+class SEIAlphaChannelInfo : public SEI
+{
+public:
+    SEIAlphaChannelInfo()
+    {
+        m_payloadType = ALPHA_CHANNEL_INFO;
+        m_payloadSize = 0;
+    }
+
+    bool alpha_channel_cancel_flag;
+    void writeSEI(const SPS&)
+    {
+        WRITE_CODE(alpha_channel_cancel_flag, 1, "alpha_channel_cancel_flag");
+        if (!alpha_channel_cancel_flag)
+        {
+            WRITE_CODE(0, 3, "alpha_channel_use_idc");
+            WRITE_CODE(0, 3, "alpha_channel_bit_depth_minus8");
+            WRITE_CODE(0, 9, "alpha_transparent_value");
+            WRITE_CODE(255, 9, "alpha_opaque_value");
+            WRITE_CODE(0, 1, "alpha_channel_incr_flag");
+            WRITE_CODE(0, 1, "alpha_channel_clip_flag");
+        }
+        if (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+        {
+            WRITE_FLAG(1, "payload_bit_equal_to_one");
+            while (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+            {
+                WRITE_FLAG(0, "payload_bit_equal_to_zero");
+            }
+        }
+    }
+};
+#endif
 
 class SEIMasteringDisplayColorVolume : public SEI
 {
