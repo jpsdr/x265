@@ -95,6 +95,12 @@ void DPB::recycleUnreferenced()
 
             // iterator is invalidated by remove, restart scan
             m_picList.remove(*curFrame);
+#if ENABLE_MULTIVIEW
+            if (curFrame->m_param->numViews > 1 && !curFrame->m_viewId && m_picList.getPOC(curFrame->m_poc, 1) && curFrame == m_picList.getPOC(curFrame->m_poc, 1)->refPicSetInterLayer0.getPOC(curFrame->m_poc, curFrame->m_viewId))
+            {
+                m_picList.getPOC(curFrame->m_poc, 1)->refPicSetInterLayer0.removeSubDPB(*curFrame);
+            }
+#endif
             iterFrame = m_picList.first();
 
             m_freeList.pushBack(*curFrame);
@@ -177,7 +183,8 @@ void DPB::prepareEncode(Frame *newFrame)
 
     m_picList.pushFront(*newFrame);
 
-    if (m_bTemporalSublayer && getTemporalLayerNonReferenceFlag(newFrame->m_sLayerId))
+    int layer = slice->m_param->numViews > 1 ? newFrame->m_viewId : (slice->m_param->numScalableLayers > 1) ? newFrame->m_sLayerId : 0;
+    if (m_bTemporalSublayer && getTemporalLayerNonReferenceFlag(layer))
     {
         switch (slice->m_nalUnitType)
         {
@@ -195,12 +202,12 @@ void DPB::prepareEncode(Frame *newFrame)
         }
     }
     // Do decoding refresh marking if any
-    decodingRefreshMarking(pocCurr, slice->m_nalUnitType, newFrame->m_sLayerId);
+    decodingRefreshMarking(pocCurr, slice->m_nalUnitType, layer);
 
-    computeRPS(pocCurr, newFrame->m_tempLayer, slice->isIRAP(), &slice->m_rps, slice->m_sps->maxDecPicBuffering[newFrame->m_tempLayer], newFrame->m_sLayerId);
+    computeRPS(pocCurr, newFrame->m_tempLayer, slice->isIRAP(), &slice->m_rps, slice->m_sps->maxDecPicBuffering[newFrame->m_tempLayer], layer);
     bool isTSAPic = ((slice->m_nalUnitType == 2) || (slice->m_nalUnitType == 3)) ? true : false;
     // Mark pictures in m_piclist as unreferenced if they are not included in RPS
-    applyReferencePictureSet(&slice->m_rps, pocCurr, newFrame->m_tempLayer, isTSAPic, newFrame->m_sLayerId);
+    applyReferencePictureSet(&slice->m_rps, pocCurr, newFrame->m_tempLayer, isTSAPic, layer);
 
 
     if (m_bTemporalSublayer && newFrame->m_tempLayer > 0
@@ -210,9 +217,9 @@ void DPB::prepareEncode(Frame *newFrame)
             || slice->m_nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R)
         )
     {
-        if (isTemporalLayerSwitchingPoint(pocCurr, newFrame->m_tempLayer, newFrame->m_sLayerId) || (slice->m_sps->maxTempSubLayers == 1))
+        if (isTemporalLayerSwitchingPoint(pocCurr, newFrame->m_tempLayer, layer) || (slice->m_sps->maxTempSubLayers == 1))
         {
-            if (getTemporalLayerNonReferenceFlag(newFrame->m_sLayerId))
+            if (getTemporalLayerNonReferenceFlag(layer))
             {
                 slice->m_nalUnitType = NAL_UNIT_CODED_SLICE_TSA_N;
             }
@@ -221,7 +228,7 @@ void DPB::prepareEncode(Frame *newFrame)
                 slice->m_nalUnitType = NAL_UNIT_CODED_SLICE_TSA_R;
             }
         }
-        else if (isStepwiseTemporalLayerSwitchingPoint(&slice->m_rps, pocCurr, newFrame->m_tempLayer, newFrame->m_sLayerId))
+        else if (isStepwiseTemporalLayerSwitchingPoint(&slice->m_rps, pocCurr, newFrame->m_tempLayer, layer))
         {
             bool isSTSA = true;
             int id = newFrame->m_gopOffset % x265_gop_ra_length[newFrame->m_gopId];
@@ -254,7 +261,7 @@ void DPB::prepareEncode(Frame *newFrame)
             }
             if (isSTSA == true)
             {
-                if (getTemporalLayerNonReferenceFlag(newFrame->m_sLayerId))
+                if (getTemporalLayerNonReferenceFlag(layer))
                 {
                     slice->m_nalUnitType = NAL_UNIT_CODED_SLICE_STSA_N;
                 }
@@ -266,12 +273,16 @@ void DPB::prepareEncode(Frame *newFrame)
         }
     }
 
+#if ENABLE_MULTIVIEW
+    if (newFrame->m_viewId)
+        slice->createInterLayerReferencePictureSet(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1);
+#endif
     if (slice->m_sliceType != I_SLICE)
-        slice->m_numRefIdx[0] = x265_clip3(1, newFrame->m_param->maxNumReferences, slice->m_rps.numberOfNegativePictures);
+        slice->m_numRefIdx[0] = x265_clip3(1, newFrame->m_param->maxNumReferences, slice->m_rps.numberOfNegativePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
     else
         slice->m_numRefIdx[0] = X265_MIN(newFrame->m_param->maxNumReferences, slice->m_rps.numberOfNegativePictures); // Ensuring L0 contains just the -ve POC
-    slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 2 : 1, slice->m_rps.numberOfPositivePictures);
-    slice->setRefPicList(m_picList, newFrame->m_sLayerId);
+    slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 3 : 2, slice->m_rps.numberOfPositivePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
+    slice->setRefPicList(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1, layer);
 
     X265_CHECK(slice->m_sliceType != B_SLICE || slice->m_numRefIdx[1], "B slice without L1 references (non-fatal)\n");
 
@@ -280,9 +291,29 @@ void DPB::prepareEncode(Frame *newFrame)
         /* TODO: the lookahead should be able to tell which reference picture
          * had the least motion residual.  We should be able to use that here to
          * select a colocation reference list and index */
-        slice->m_colFromL0Flag = false;
+
+        bool bLowDelay = true;
+        int  iCurrPOC = slice->m_poc;
+        int iRefIdx = 0;
+
+        for (iRefIdx = 0; iRefIdx < slice->m_numRefIdx[0] && bLowDelay; iRefIdx++)
+        {
+            if (slice->m_refPOCList[0][iRefIdx] > iCurrPOC)
+            {
+                bLowDelay = false;
+            }
+        }
+        for (iRefIdx = 0; iRefIdx < slice->m_numRefIdx[1] && bLowDelay; iRefIdx++)
+        {
+            if (slice->m_refPOCList[1][iRefIdx] > iCurrPOC)
+            {
+                bLowDelay = false;
+            }
+        }
+
+        slice->m_bCheckLDC = bLowDelay;
+        slice->m_colFromL0Flag = bLowDelay;
         slice->m_colRefIdx = 0;
-        slice->m_bCheckLDC = false;
     }
     else
     {
@@ -316,10 +347,18 @@ void DPB::computeRPS(int curPoc, int tempId, bool isRAP, RPS * rps, unsigned int
 
     while (iterPic && (poci < maxDecPicBuffer - 1))
     {
-        if (iterPic->m_valid && (iterPic->m_poc != curPoc) && iterPic->m_encData->m_bHasReferences && iterPic->m_sLayerId == scalableLayerId)
+        int layer = iterPic->m_param->numViews > 1 ? iterPic->m_viewId : (iterPic->m_param->numScalableLayers > 1) ? iterPic->m_sLayerId : 0;
+        if (iterPic->m_valid && (iterPic->m_poc != curPoc) && iterPic->m_encData->m_bHasReferences && layer == scalableLayerId)
         {
             if ((!m_bTemporalSublayer || (iterPic->m_tempLayer <= tempId)) && ((m_lastIDR >= curPoc) || (m_lastIDR <= iterPic->m_poc)))
             {
+#if ENABLE_MULTIVIEW
+                    if (iterPic->m_param->numViews > 1 && layer && numNeg == iterPic->m_param->maxNumReferences - 1 && (iterPic->m_poc - curPoc) < 0)
+                    {
+                        iterPic = iterPic->m_next;
+                        continue;
+                    }
+#endif
                     rps->poc[poci] = iterPic->m_poc;
                     rps->deltaPOC[poci] = rps->poc[poci] - curPoc;
                     (rps->deltaPOC[poci] < 0) ? numNeg++ : numPos++;
@@ -340,7 +379,8 @@ void DPB::computeRPS(int curPoc, int tempId, bool isRAP, RPS * rps, unsigned int
 bool DPB::getTemporalLayerNonReferenceFlag(int scalableLayerId)
 {
     Frame* curFrame = m_picList.first();
-    if (curFrame->m_valid && curFrame->m_encData->m_bHasReferences && curFrame->m_sLayerId == scalableLayerId)
+    int layer = curFrame->m_param->numViews > 1 ? curFrame->m_viewId : (curFrame->m_param->numScalableLayers > 1) ? curFrame->m_sLayerId : 0;
+    if (curFrame->m_valid && curFrame->m_encData->m_bHasReferences && layer == scalableLayerId)
     {
         curFrame->m_sameLayerRefPic = true;
         return false;
@@ -359,7 +399,8 @@ void DPB::decodingRefreshMarking(int pocCurr, NalUnitType nalUnitType, int scala
         Frame* iterFrame = m_picList.first();
         while (iterFrame)
         {
-            if (iterFrame->m_valid && iterFrame->m_poc != pocCurr && iterFrame->m_sLayerId == scalableLayerId)
+            int layer = iterFrame->m_param->numViews > 1 ? iterFrame->m_viewId : (iterFrame->m_param->numScalableLayers > 1) ? iterFrame->m_sLayerId : 0;
+            if (iterFrame->m_valid && iterFrame->m_poc != pocCurr && layer == scalableLayerId)
                 iterFrame->m_encData->m_bHasReferences = false;
             iterFrame = iterFrame->m_next;
         }
@@ -376,7 +417,8 @@ void DPB::decodingRefreshMarking(int pocCurr, NalUnitType nalUnitType, int scala
             Frame* iterFrame = m_picList.first();
             while (iterFrame)
             {
-                if (iterFrame->m_valid && iterFrame->m_poc != pocCurr && iterFrame->m_poc != m_pocCRA && iterFrame->m_sLayerId == scalableLayerId)
+                int layer = iterFrame->m_param->numViews > 1 ? iterFrame->m_viewId : (iterFrame->m_param->numScalableLayers > 1) ? iterFrame->m_sLayerId : 0;
+                if (iterFrame->m_valid && iterFrame->m_poc != pocCurr && iterFrame->m_poc != m_pocCRA && layer == scalableLayerId)
                     iterFrame->m_encData->m_bHasReferences = false;
                 iterFrame = iterFrame->m_next;
             }
@@ -404,7 +446,8 @@ void DPB::applyReferencePictureSet(RPS *rps, int curPoc, int tempId, bool isTSAP
     Frame* iterFrame = m_picList.first();
     while (iterFrame)
     {
-        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && iterFrame->m_sLayerId == scalableLayerId)
+        int layer = iterFrame->m_param->numViews > 1 ? iterFrame->m_viewId : (iterFrame->m_param->numScalableLayers > 1) ? iterFrame->m_sLayerId : 0;
+        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && layer == scalableLayerId)
         {
             // loop through all pictures in the Reference Picture Set
             // to see if the picture should be kept as reference picture
@@ -447,7 +490,8 @@ bool DPB::isTemporalLayerSwitchingPoint(int curPoc, int tempId, int scalableLaye
     Frame* iterFrame = m_picList.first();
     while (iterFrame)
     {
-        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && iterFrame->m_sLayerId == scalableLayerId)
+        int layer = iterFrame->m_param->numViews > 1 ? iterFrame->m_viewId : (iterFrame->m_param->numScalableLayers > 1) ? iterFrame->m_sLayerId : 0;
+        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && layer == scalableLayerId)
         {
             if (iterFrame->m_tempLayer >= tempId)
             {
@@ -465,7 +509,8 @@ bool DPB::isStepwiseTemporalLayerSwitchingPoint(RPS *rps, int curPoc, int tempId
     Frame* iterFrame = m_picList.first();
     while (iterFrame)
     {
-        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && iterFrame->m_sLayerId == scalableLayerId)
+        int layer = iterFrame->m_param->numViews > 1 ? iterFrame->m_viewId : (iterFrame->m_param->numScalableLayers > 1) ? iterFrame->m_sLayerId : 0;
+        if (iterFrame->m_valid && iterFrame->m_poc != curPoc && iterFrame->m_encData->m_bHasReferences && layer == scalableLayerId)
         {
             for (int i = 0; i < rps->numberOfPositivePictures + rps->numberOfNegativePictures; i++)
             {

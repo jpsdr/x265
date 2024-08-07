@@ -33,7 +33,7 @@
 
 using namespace X265_NS;
 
-InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m, bool alpha)
+InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m, bool alpha, int format)
 {
     const char * s = strrchr(info.filename, '.');
 
@@ -48,5 +48,5 @@ InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m, bool alpha)
         return new VPYInput(info);
 #endif
     else
-        return new YUVInput(info, alpha);
+        return new YUVInput(info, alpha, format);
 }

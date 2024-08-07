@@ -415,6 +415,12 @@ void x265_param_default(x265_param* param)
     /* Film grain characteristics model filename */
     param->filmGrain = NULL;
     param->bEnableSBRC = 0;
+
+    /* Multi-View Encoding*/
+    param->numViews = 1;
+    param->format = 0;
+
+    param->numLayers = 1;
 }
 
 int x265_param_default_preset(x265_param* param, const char* preset, const char* tune)
@@ -1509,7 +1515,16 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
             {
                 p->bEnableAlpha = 1;
                 p->numScalableLayers = 2;
+                p->numLayers = 2;
             }
+        }
+#endif
+#if ENABLE_MULTIVIEW
+        OPT("format")
+            p->format = atoi(value);
+        OPT("num-views")
+        {
+            p->numViews = atoi(value);
         }
 #endif
         else
@@ -1994,6 +2009,11 @@ int x265_check_params(x265_param* param)
         CHECK((param->rc.rateControlMode != X265_RC_CQP), "Alpha encode supported only with CQP mode");
     }
 #endif
+#if ENABLE_MULTIVIEW
+    CHECK((param->numViews > 2), "Multi-View Encoding currently support only 2 views");
+    CHECK((param->numViews > 1) && (param->internalBitDepth != 8), "BitDepthConstraint must be 8 for Multiview main profile");
+    CHECK((param->numViews > 1 && param->rc.rateControlMode != X265_RC_CQP), "Multiview encode supported only with CQP mode");
+#endif
     return check_failed;
 }
 
@@ -2171,6 +2191,9 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->bSingleSeiNal, "single-sei");
 #if ENABLE_ALPHA
     TOOLOPT(param->numScalableLayers > 1, "alpha");
+#endif
+#if ENABLE_MULTIVIEW
+    TOOLOPT(param->numViews > 1, "multi-view");
 #endif
 #if ENABLE_HDR10_PLUS
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
@@ -2443,6 +2466,10 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     BOOL(p->bEnableTemporalFilter, "mcstf");
 #if ENABLE_ALPHA
     BOOL(p->bEnableAlpha, "alpha");
+#endif
+#if ENABLE_MULTIVIEW
+    s += sprintf(s, " num-views=%d", p->numViews);
+    s += sprintf(s, " format=%d", p->format);
 #endif
     BOOL(p->bEnableSBRC, "sbrc");
 #undef BOOL
@@ -2981,6 +3008,11 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bEnableAlpha = src->bEnableAlpha;
     dst->numScalableLayers = src->numScalableLayers;
 #endif
+#if ENABLE_MULTIVIEW
+    dst->numViews = src->numViews;
+    dst->format = src->format;
+#endif
+    dst->numLayers = src->numLayers;
 
     if (src->videoSignalTypePreset) dst->videoSignalTypePreset = strdup(src->videoSignalTypePreset);
     else dst->videoSignalTypePreset = NULL;

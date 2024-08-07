@@ -372,6 +372,10 @@ typedef enum
     CONTENT_LIGHT_LEVEL_INFO             = 144,
     ALTERNATIVE_TRANSFER_CHARACTERISTICS = 147,
     ALPHA_CHANNEL_INFO                   = 165,
+    THREE_DIMENSIONAL_REFERENCE_DISPLAYS_INFO = 176,
+    MULTIVIEW_SCENE_INFO                 = 178,
+    MULTIVIEW_ACQUISITION_INFO           = 179,
+    MULTIVIEW_VIEW_POSITION              = 180
 } SEIPayloadType;
 
 typedef struct x265_sei_payload
@@ -490,6 +494,7 @@ typedef struct x265_picture
     int    width;
 
     int   layerID;
+    int    format;
 } x265_picture;
 
 typedef enum
@@ -627,12 +632,27 @@ typedef enum
 #define X265_MAX_GOP_LENGTH 16
 #define MAX_T_LAYERS 7
 
+#if ENABLE_MULTIVIEW
+#define MAX_VIEWS 2
+#define MAX_VPS_NUM_SCALABILITY_TYPES     16
+#define MAX_VPS_LAYER_ID_PLUS1            MAX_VIEWS
+#define MULTIVIEW_SCALABILITY_IDX         1
+#else
+#define MAX_VIEWS 1
+#endif
+
 #if ENABLE_ALPHA
 #define MAX_SCALABLE_LAYERS     2
 #define MAX_VPS_NUM_SCALABILITY_TYPES     16
 #define MAX_VPS_LAYER_ID_PLUS1            MAX_SCALABLE_LAYERS
 #else
 #define MAX_SCALABLE_LAYERS     1
+#endif
+
+#if ENABLE_ALPHA || ENABLE_MULTIVIEW
+#define MAX_LAYERS              2
+#else
+#define MAX_LAYERS              1
 #endif
 
 #define X265_IPRATIO_STRENGTH   1.43
@@ -2311,6 +2331,12 @@ typedef struct x265_param
     /*Alpha channel encoding*/
     int      bEnableAlpha;
     int      numScalableLayers;
+
+    /*Multi View Encoding*/
+    int      numViews;
+    int      format;
+
+    int      numLayers;
 } x265_param;
 
 /* x265_param_alloc:

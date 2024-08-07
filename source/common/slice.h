@@ -74,6 +74,7 @@ namespace Profile {
         MAINSTILLPICTURE = 3,
         MAINREXT = 4,
         HIGHTHROUGHPUTREXT = 5,
+        MULTIVIEWMAIN = 6,
         SCALABLEMAIN = 7,
         SCALABLEMAIN10 = 8
     };
@@ -108,7 +109,7 @@ namespace Level {
 
 struct ProfileTierLevel
 {
-    int      profileIdc[MAX_SCALABLE_LAYERS];
+    int      profileIdc[MAX_LAYERS];
     int      levelIdc;
     uint32_t minCrForLevel;
     uint32_t maxLumaSrForLevel;
@@ -162,8 +163,10 @@ struct VPS
     uint32_t         maxDecPicBuffering[MAX_T_LAYERS];
     uint32_t         maxLatencyIncrease[MAX_T_LAYERS];
     int              m_numLayers;
+    int              m_numViews;
+    bool             vps_extension_flag;
 
-#if ENABLE_ALPHA
+#if (ENABLE_ALPHA || ENABLE_MULTIVIEW)
     bool             splitting_flag;
     int              m_scalabilityMask[MAX_VPS_NUM_SCALABILITY_TYPES];
     int              scalabilityTypes;
@@ -174,7 +177,11 @@ struct VPS
     uint8_t          m_layerIdInVps[MAX_VPS_LAYER_ID_PLUS1];
     int              m_viewIdLen;
     int              m_vpsNumLayerSetsMinus1;
-    bool             vps_extension_flag;
+#endif
+
+#if ENABLE_MULTIVIEW
+    int              m_viewId[MAX_VIEWS];
+    int              m_layerIdIncludedFlag;
 #endif
 };
 
@@ -269,6 +276,13 @@ struct SPS
 
     Window   conformanceWindow;
     VUI      vuiParameters;
+    bool     sps_extension_flag;
+
+#if ENABLE_MULTIVIEW
+    int      setSpsExtOrMaxSubLayersMinus1;
+    int      maxViews;
+    bool     vui_parameters_present_flag;
+#endif
 
     SPS()
     {
@@ -307,6 +321,9 @@ struct PPS
 
     int      numRefIdxDefault[2];
     bool     pps_slice_chroma_qp_offsets_present_flag;
+
+    bool     pps_extension_flag;
+    int      maxViews;
 };
 
 struct WeightParam
@@ -401,7 +418,10 @@ public:
 
     void disableWeights();
 
-    void setRefPicList(PicList& picList, int sLayerId);
+    void setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int viewId);
+#if ENABLE_MULTIVIEW
+    void createInterLayerReferencePictureSet(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1);
+#endif
 
     bool getRapPicFlag() const
     {
