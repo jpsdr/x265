@@ -585,7 +585,7 @@ void Entropy::codeSPS(const SPS& sps, const ScalingList& scalingList, const Prof
     WRITE_FLAG(sps.sps_extension_flag, "sps_extension_flag");
 
 #if ENABLE_MULTIVIEW
-    if (sps.sps_extension_flag)
+    if (sps.sps_extension_flag && sps.maxViews > 1)
     {
         WRITE_FLAG(0, "sps_range_extensions_flag");
         WRITE_FLAG(sps.maxViews > 1, "sps_multilayer_extension_flag");
@@ -596,6 +596,20 @@ void Entropy::codeSPS(const SPS& sps, const ScalingList& scalingList, const Prof
             WRITE_FLAG(0, "inter_view_mv_vert_constraint_flag");
         else
             WRITE_FLAG(1, "inter_view_mv_vert_constraint_flag");
+    }
+#endif
+
+#if ENABLE_SCC_EXT
+    if (ptl.profileIdc[0] == Profile::MAINSCC)
+    {
+        bool sps_extension_flags[NUM_EXTENSION_FLAGS] = { false };
+        sps_extension_flags[SCC_EXT_IDX] = true;
+        for (int i = 0; i < NUM_EXTENSION_FLAGS; i++)
+            WRITE_FLAG(sps_extension_flags[i], "sps_extension_flag");
+        WRITE_FLAG(1, "intra_block_copy_enabled_flag");
+        WRITE_FLAG(0, "palette_mode_enabled_flag");
+        WRITE_CODE(0, 2, "motion_vector_resolution_control_idc");
+        WRITE_FLAG(0, "intra_boundary_filter_disabled_flag");
     }
 #endif
 }
@@ -650,7 +664,7 @@ void Entropy::codePPS( const PPS& pps, bool filerAcross, int iPPSInitQpMinus26, 
     WRITE_FLAG(pps.pps_extension_flag, "pps_extension_flag");
 
 #if ENABLE_MULTIVIEW
-    if (pps.pps_extension_flag)
+    if (pps.pps_extension_flag && pps.maxViews > 1)
     {
         WRITE_FLAG(0, "pps_range_extensions_flag");
         WRITE_FLAG(pps.maxViews > 1, "pps_multilayer_extension_flag");
@@ -664,6 +678,20 @@ void Entropy::codePPS( const PPS& pps, bool filerAcross, int iPPSInitQpMinus26, 
             WRITE_UVLC(0, "num_ref_loc_offsets");
             WRITE_FLAG(0, "colour_mapping_enabled_flag");
         }
+    }
+#endif
+
+
+#if ENABLE_SCC_EXT
+    if (pps.profileIdc == Profile::MAINSCC)
+    {
+        bool pps_extension_flags[NUM_EXTENSION_FLAGS] = { false };
+        pps_extension_flags[SCC_EXT_IDX] = true;
+        for (int i = 0; i < NUM_EXTENSION_FLAGS; i++)
+            WRITE_FLAG(pps_extension_flags[i], "pps_extension_flag");
+        WRITE_FLAG(1, "curr_pic_as_ref_enabled_pps_flag");
+        WRITE_FLAG(0, "adaptive_colour_trans_flag");
+        WRITE_FLAG(0, "palette_predictor_initializer_flag");
     }
 #endif
 }
@@ -686,7 +714,7 @@ void Entropy::codeProfileTier(const ProfileTierLevel& ptl, int maxTempSubLayers,
     WRITE_FLAG(ptl.nonPackedConstraintFlag, "general_non_packed_constraint_flag");
     WRITE_FLAG(ptl.frameOnlyConstraintFlag, "general_frame_only_constraint_flag");
 
-    if (ptl.profileIdc[layer] == Profile::MAINREXT || ptl.profileIdc[layer] == Profile::HIGHTHROUGHPUTREXT || ptl.profileIdc[layer] == Profile::SCALABLEMAIN || ptl.profileIdc[layer] == Profile::SCALABLEMAIN10 || ptl.profileIdc[layer] == Profile::MULTIVIEWMAIN)
+    if (ptl.profileIdc[layer] == Profile::MAINREXT || ptl.profileIdc[layer] == Profile::HIGHTHROUGHPUTREXT || ptl.profileIdc[layer] == Profile::SCALABLEMAIN || ptl.profileIdc[layer] == Profile::SCALABLEMAIN10 || ptl.profileIdc[layer] == Profile::MULTIVIEWMAIN || ptl.profileIdc[layer] == Profile::MAINSCC)
     {
         uint32_t bitDepthConstraint = ptl.bitDepthConstraint;
         int csp = ptl.chromaFormatConstraint;
@@ -699,9 +727,19 @@ void Entropy::codeProfileTier(const ProfileTierLevel& ptl, int maxTempSubLayers,
         WRITE_FLAG(ptl.intraConstraintFlag,        "general_intra_constraint_flag");
         WRITE_FLAG(ptl.onePictureOnlyConstraintFlag,"general_one_picture_only_constraint_flag");
         WRITE_FLAG(ptl.lowerBitRateConstraintFlag, "general_lower_bit_rate_constraint_flag");
-        WRITE_CODE(0 , 16, "XXX_reserved_zero_35bits[0..15]");
-        WRITE_CODE(0 , 16, "XXX_reserved_zero_35bits[16..31]");
-        WRITE_CODE(0 ,  3, "XXX_reserved_zero_35bits[32..34]");
+        if (ptl.profileIdc[layer] == Profile::MAINSCC)
+        {
+            WRITE_FLAG(bitDepthConstraint <= 14, "max_14bit_constraint_flag");
+            WRITE_CODE(0, 16, "reserved_zero_33bits[0..15]");
+            WRITE_CODE(0, 16, "reserved_zero_33bits[16..31]");
+            WRITE_FLAG(0, "reserved_zero_33bits[32]");
+        }
+        else
+        {
+            WRITE_CODE(0, 16, "XXX_reserved_zero_35bits[0..15]");
+            WRITE_CODE(0, 16, "XXX_reserved_zero_35bits[16..31]");
+            WRITE_CODE(0, 3, "XXX_reserved_zero_35bits[32..34]");
+        }
     }
     else
     {
@@ -709,6 +747,8 @@ void Entropy::codeProfileTier(const ProfileTierLevel& ptl, int maxTempSubLayers,
         WRITE_CODE(0, 16, "XXX_reserved_zero_44bits[16..31]");
         WRITE_CODE(0, 12, "XXX_reserved_zero_44bits[32..43]");
     }
+    if (ptl.profileIdc[layer] == Profile::MAINSCC)
+        WRITE_FLAG(false, "inbld_flag");
 
     WRITE_CODE(ptl.levelIdc, 8, "general_level_idc");
 
@@ -961,7 +1001,11 @@ void Entropy::codeSliceHeader(const Slice& slice, FrameData& encData, uint32_t s
         }
 
         if (slice.m_sps->bTemporalMVPEnabled)
+#if ENABLE_SCC_EXT
+            WRITE_FLAG(slice.m_bTemporalMvp, "slice_temporal_mvp_enable_flag");
+#else
             WRITE_FLAG(1, "slice_temporal_mvp_enable_flag");
+#endif
     }
     const SAOParam *saoParam = encData.m_saoParam;
     if (slice.m_bUseSao)
@@ -1001,9 +1045,17 @@ void Entropy::codeSliceHeader(const Slice& slice, FrameData& encData, uint32_t s
     }
 
     if (slice.isInterB())
+#if ENABLE_SCC_EXT
+        WRITE_FLAG(slice.m_bLMvdL1Zero, "mvd_l1_zero_flag");
+#else
         WRITE_FLAG(0, "mvd_l1_zero_flag");
+#endif
 
+#if ENABLE_SCC_EXT
+    if (slice.m_bTemporalMvp)
+#else
     if (slice.m_sps->bTemporalMVPEnabled)
+#endif
     {
         if (slice.m_sliceType == B_SLICE)
             WRITE_FLAG(slice.m_colFromL0Flag, "collocated_from_l0_flag");
@@ -1690,6 +1742,10 @@ void Entropy::codePredWeightTable(const Slice& slice)
         {
             for (int ref = 0; ref < slice.m_numRefIdx[list]; ref++)
             {
+#if ENABLE_SCC_EXT
+                if (slice.m_poc == slice.m_refPOCList[list][ref])
+                    continue;
+#endif
                 wp = slice.m_weightPredTable[list][ref];
                 if (!bDenomCoded)
                 {
@@ -1710,6 +1766,10 @@ void Entropy::codePredWeightTable(const Slice& slice)
             {
                 for (int ref = 0; ref < slice.m_numRefIdx[list]; ref++)
                 {
+#if ENABLE_SCC_EXT
+                    if (slice.m_poc == slice.m_refPOCList[list][ref])
+                        continue;
+#endif
                     wp = slice.m_weightPredTable[list][ref];
                     WRITE_FLAG(!!wp[1].wtPresent, "chroma_weight_lX_flag");
                     totalSignalledWeightFlags += 2 * wp[1].wtPresent;
@@ -1718,6 +1778,10 @@ void Entropy::codePredWeightTable(const Slice& slice)
 
             for (int ref = 0; ref < slice.m_numRefIdx[list]; ref++)
             {
+#if ENABLE_SCC_EXT
+                if (slice.m_poc == slice.m_refPOCList[list][ref])
+                    continue;
+#endif
                 wp = slice.m_weightPredTable[list][ref];
                 if (wp[0].wtPresent)
                 {

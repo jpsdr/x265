@@ -53,8 +53,8 @@ DPB::~DPB()
         FrameData* next = m_frameDataFreeList->m_freeListNext;
         m_frameDataFreeList->destroy();
 
-        m_frameDataFreeList->m_reconPic->destroy();
-        delete m_frameDataFreeList->m_reconPic;
+        m_frameDataFreeList->m_reconPic[0]->destroy();
+        delete m_frameDataFreeList->m_reconPic[0];
 
         delete m_frameDataFreeList;
         m_frameDataFreeList = next;
@@ -132,7 +132,8 @@ void DPB::recycleUnreferenced()
                 curFrame->m_prevCtuInfoChange = NULL;
             }
             curFrame->m_encData = NULL;
-            curFrame->m_reconPic = NULL;
+            for (int i = 0; i < !!curFrame->m_param->bEnableSCC + 1; i++)
+                curFrame->m_reconPic[i] = NULL;
         }
     }
 }
@@ -150,7 +151,9 @@ void DPB::prepareEncode(Frame *newFrame)
     if (slice->m_nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL || slice->m_nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP)
         m_lastIDR = pocCurr;
     slice->m_lastIDR = m_lastIDR;
-    slice->m_sliceType = IS_X265_TYPE_B(type) ? B_SLICE : (type == X265_TYPE_P) ? P_SLICE : I_SLICE;
+    slice->m_origSliceType = slice->m_sliceType = IS_X265_TYPE_B(type) ? B_SLICE : (type == X265_TYPE_P) ? P_SLICE : I_SLICE;
+    if (slice->m_param->bEnableSCC && IS_X265_TYPE_I(type))
+        slice->m_sliceType = P_SLICE;
 
     if (type == X265_TYPE_B)
     {
@@ -204,7 +207,8 @@ void DPB::prepareEncode(Frame *newFrame)
     // Do decoding refresh marking if any
     decodingRefreshMarking(pocCurr, slice->m_nalUnitType, layer);
 
-    computeRPS(pocCurr, newFrame->m_tempLayer, slice->isIRAP(), &slice->m_rps, slice->m_sps->maxDecPicBuffering[newFrame->m_tempLayer], layer);
+    uint32_t maxDecBuffer = (slice->m_sps->maxDecPicBuffering[newFrame->m_tempLayer] >= 8 && slice->m_param->bEnableSCC) ? 7 : slice->m_sps->maxDecPicBuffering[newFrame->m_tempLayer];
+    computeRPS(pocCurr, newFrame->m_tempLayer, slice->isIRAP(), &slice->m_rps, maxDecBuffer, layer);
     bool isTSAPic = ((slice->m_nalUnitType == 2) || (slice->m_nalUnitType == 3)) ? true : false;
     // Mark pictures in m_piclist as unreferenced if they are not included in RPS
     applyReferencePictureSet(&slice->m_rps, pocCurr, newFrame->m_tempLayer, isTSAPic, layer);
@@ -277,10 +281,11 @@ void DPB::prepareEncode(Frame *newFrame)
     if (newFrame->m_viewId)
         slice->createInterLayerReferencePictureSet(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1);
 #endif
+    int numRef = slice->m_param->bEnableSCC ? slice->m_rps.numberOfNegativePictures + 1 : slice->m_rps.numberOfNegativePictures;
     if (slice->m_sliceType != I_SLICE)
-        slice->m_numRefIdx[0] = x265_clip3(1, newFrame->m_param->maxNumReferences, slice->m_rps.numberOfNegativePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
+        slice->m_numRefIdx[0] = x265_clip3(1, newFrame->m_param->maxNumReferences, numRef + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
     else
-        slice->m_numRefIdx[0] = X265_MIN(newFrame->m_param->maxNumReferences, slice->m_rps.numberOfNegativePictures); // Ensuring L0 contains just the -ve POC
+        slice->m_numRefIdx[0] = X265_MIN(newFrame->m_param->maxNumReferences, numRef); // Ensuring L0 contains just the -ve POC
     slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 3 : 2, slice->m_rps.numberOfPositivePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
     slice->setRefPicList(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1, layer);
 
@@ -321,6 +326,59 @@ void DPB::prepareEncode(Frame *newFrame)
         slice->m_colFromL0Flag = true;
         slice->m_colRefIdx = 0;
     }
+
+    slice->m_bTemporalMvp = slice->m_sps->bTemporalMVPEnabled;
+#if ENABLE_SCC_EXT
+    bool bGPBcheck = false;
+    if (slice->m_sliceType == B_SLICE)
+    {
+        if (slice->m_param->bEnableSCC)
+        {
+            if (slice->m_numRefIdx[0] - 1 == slice->m_numRefIdx[1])
+            {
+                bGPBcheck = true;
+                for (int i = 0; i < slice->m_numRefIdx[1]; i++)
+                {
+                    if (slice->m_refPOCList[1][i] != slice->m_refPOCList[0][i])
+                    {
+                        bGPBcheck = false;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (slice->m_numRefIdx[0] == slice->m_numRefIdx[1])
+        {
+            bGPBcheck = true;
+            int i;
+            for (i = 0; i < slice->m_numRefIdx[1]; i++)
+            {
+                if (slice->m_refPOCList[1][i] != slice->m_refPOCList[0][i])
+                {
+                    bGPBcheck = false;
+                    break;
+                }
+            }
+        }
+    }
+    if (bGPBcheck)
+    {
+        slice->m_bLMvdL1Zero = true;
+    }
+    else
+    {
+        slice->m_bLMvdL1Zero = false;
+    }
+
+    if (!slice->isIntra() && slice->m_param->bEnableTemporalMvp)
+    {
+        const Frame* colPic = slice->m_refFrameList[slice->isInterB() && !slice->m_colFromL0Flag][slice->m_colRefIdx];
+        if (colPic->m_poc == slice->m_poc)
+            slice->m_bTemporalMvp = false;
+        else
+            slice->m_bTemporalMvp = true;
+    }
+#endif
 
     // Disable Loopfilter in bound area, because we will do slice-parallelism in future
     slice->m_sLFaseFlag = (newFrame->m_param->maxSlices > 1) ? false : ((SLFASE_CONSTANT & (1 << (pocCurr % 31))) > 0);

@@ -34,7 +34,7 @@ option(NATIVE_BUILD "Target the build CPU" OFF)
 option(STATIC_LINK_CRT "Statically link C runtime for release builds" OFF)
 mark_as_advanced(FPROFILE_USE FPROFILE_GENERATE NATIVE_BUILD)
 # X265_BUILD must be incremented each time the public API is changed
-set(X265_BUILD 211)
+set(X265_BUILD 212)
 configure_file("${PROJECT_SOURCE_DIR}/x265.def.in"
                "${PROJECT_BINARY_DIR}/x265.def")
 configure_file("${PROJECT_SOURCE_DIR}/x265_config.h.in"
@@ -626,6 +626,11 @@ endif()
 option(ENABLE_MULTIVIEW "Enable Multi-view encoding in HEVC" OFF)
 if(ENABLE_MULTIVIEW)
     add_definitions(-DENABLE_MULTIVIEW)
+endif()
+
+option(ENABLE_SCC_EXT "Enable screen content coding extension in HEVC" OFF)
+if(ENABLE_SCC_EXT)
+    add_definitions(-DENABLE_SCC_EXT)
 endif()
 
 add_subdirectory(encoder)

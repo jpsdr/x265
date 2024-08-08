@@ -76,7 +76,8 @@ namespace Profile {
         HIGHTHROUGHPUTREXT = 5,
         MULTIVIEWMAIN = 6,
         SCALABLEMAIN = 7,
-        SCALABLEMAIN10 = 8
+        SCALABLEMAIN10 = 8,
+        MAINSCC = 9
     };
 }
 
@@ -324,6 +325,8 @@ struct PPS
 
     bool     pps_extension_flag;
     int      maxViews;
+
+    int      profileIdc;
 };
 
 struct WeightParam
@@ -373,6 +376,7 @@ public:
 
     NalUnitType m_nalUnitType;
     SliceType   m_sliceType;
+    SliceType   m_origSliceType;
     int         m_sliceQp;
     int         m_chromaQpOffset[2];
     int         m_poc;
@@ -399,6 +403,13 @@ public:
     int         m_fieldNum;
     Frame*      m_mcstfRefFrameList[2][MAX_MCSTF_TEMPORAL_WINDOW_LENGTH];
 
+#if  ENABLE_SCC_EXT
+    Frame*      m_lastEncPic;
+    bool        m_bLMvdL1Zero;
+    bool        m_useIntegerMv;
+#endif
+    bool        m_bTemporalMvp;
+
     Slice()
     {
         m_lastIDR = 0;
@@ -414,6 +425,11 @@ public:
         m_rpsIdx = -1;
         m_chromaQpOffset[0] = m_chromaQpOffset[1] = 0;
         m_fieldNum = 0;
+#if  ENABLE_SCC_EXT
+        m_lastEncPic = NULL;
+        m_useIntegerMv = false;
+#endif
+        m_bTemporalMvp = false;
     }
 
     void disableWeights();
@@ -421,6 +437,10 @@ public:
     void setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int viewId);
 #if ENABLE_MULTIVIEW
     void createInterLayerReferencePictureSet(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1);
+#endif
+
+#if  ENABLE_SCC_EXT
+    bool isOnlyCurrentPictureAsReference() const;
 #endif
 
     bool getRapPicFlag() const
