@@ -2232,7 +2232,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
             }
 #endif
 
-            if ((m_param->bEnableSceneCutAwareQp & FORWARD)
+            if (m_param->bEnableSceneCutAwareQp & FORWARD)
             {
                 bool isSceneCut = frameEnc[0]->m_lowres.bScenecut;
                 // If multi pass, overwrite with stats file scenecut info
