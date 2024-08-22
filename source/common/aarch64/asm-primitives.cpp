@@ -1010,12 +1010,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_64x64].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_64x64_sve);
 
 #if !HIGH_BIT_DEPTH
-    // sse_pp
-    p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_sve);
-
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].sse_pp   = PFX(pixel_sse_pp_4x8_sve);
-
     p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sub_ps  = PFX(pixel_sub_ps_8x16_sve);
 
     // satd
@@ -1036,9 +1030,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_4x4].sa8d   = PFX(pixel_satd_4x4_sve);
     p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d = PFX(pixel_satd_4x4_sve);
 #endif
-
-    // quant
-    p.quant = PFX(quant_sve);
 }
 #endif
 
@@ -1068,13 +1059,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     CHROMA_420_PU_MULTIPLE_ARCHS(addAvg[ALIGNED], addAvg, sve2);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[NONALIGNED], addAvg);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[ALIGNED], addAvg);
-
-    // sse_pp
-    p.cu[BLOCK_32x32].sse_pp = PFX(pixel_sse_pp_32x32_sve2);
-    p.cu[BLOCK_64x64].sse_pp = PFX(pixel_sse_pp_64x64_sve2);
-
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].sse_pp = PFX(pixel_sse_pp_32x32_sve2);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_sve2);
 
     // sse_ss
     p.cu[BLOCK_4x4].sse_ss   = PFX(pixel_sse_ss_4x4_sve2);
@@ -1185,6 +1169,17 @@ void setupNeonDotProdPrimitives(EncoderPrimitives &p)
     LUMA_PU_MULTIPLE_16(sad, pixel_sad, neon_dotprod);
     LUMA_PU_MULTIPLE_16(sad_x3, sad_x3, neon_dotprod);
     LUMA_PU_MULTIPLE_16(sad_x4, sad_x4, neon_dotprod);
+
+    // sse_pp
+    ALL_LUMA_TU(sse_pp, pixel_sse_pp, neon_dotprod);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_neon_dotprod);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_neon_dotprod);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].sse_pp = PFX(pixel_sse_pp_16x16_neon_dotprod);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].sse_pp = PFX(pixel_sse_pp_32x32_neon_dotprod);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].sse_pp   = PFX(pixel_sse_pp_4x8_neon_dotprod);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sse_pp  = PFX(pixel_sse_pp_8x16_neon_dotprod);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sse_pp = PFX(pixel_sse_pp_16x32_neon_dotprod);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_neon_dotprod);
 }
 #else // !HIGH_BIT_DEPTH
 void setupNeonDotProdPrimitives(EncoderPrimitives &)
