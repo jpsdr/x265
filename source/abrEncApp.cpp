@@ -678,9 +678,9 @@ ret:
                         pic_in[view] = NULL;
                     else
                     {					
-						if (readPicture(pic_in[view], view))
+                        if (readPicture(pic_in[view], view))
                         {
-							if (view == m_param->numViews - 1)
+                            if (view == m_param->numViews - 1)
                                 inFrameCount++;
                         }
                         else
