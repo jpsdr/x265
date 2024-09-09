@@ -384,6 +384,8 @@ extern "C" {
 #include "loopfilter-prim.h"
 #include "intrapred-prim.h"
 #include "sao-prim.h"
+#include "filter-neon-dotprod.h"
+#include "filter-neon-i8mm.h"
 
 namespace X265_NS
 {
@@ -1039,6 +1041,18 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
         setupIntraPrimitives_neon(p);
         setupSaoPrimitives_neon(p);
     }
+#ifdef HAVE_NEON_DOTPROD
+    if (cpuMask & X265_CPU_NEON_DOTPROD)
+    {
+        setupFilterPrimitives_neon_dotprod(p);
+    }
+#endif
+#ifdef HAVE_NEON_I8MM
+    if (cpuMask & X265_CPU_NEON_I8MM)
+    {
+        setupFilterPrimitives_neon_i8mm(p);
+    }
+#endif
 #if defined(HAVE_SVE) && HAVE_SVE_BRIDGE
     if (cpuMask & X265_CPU_SVE)
     {
