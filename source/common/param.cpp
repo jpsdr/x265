@@ -2017,14 +2017,13 @@ int x265_check_params(x265_param* param)
     if (param->bEnableAlpha)
     {
         CHECK((param->internalCsp != X265_CSP_I420), "Alpha encode supported only with i420a colorspace");
-        CHECK((param->rc.rateControlMode != X265_RC_CQP), "Alpha encode supported only with CQP mode");
+        CHECK((param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Alpha encode doesnot support multipass feature");
     }
 #endif
 #if ENABLE_MULTIVIEW
     CHECK((param->numViews > 2), "Multi-View Encoding currently support only 2 views");
     CHECK((param->numViews > 1) && (param->internalBitDepth != 8), "BitDepthConstraint must be 8 for Multiview main profile");
-    CHECK((param->numViews > 1) && (param->rc.rateControlMode != X265_RC_CQP && param->rc.rateControlMode !=  X265_RC_ABR),
-        "Multiview encode supported only with CQP and ABR modes");
+    CHECK((param->numViews > 1) && (param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Multiview encode doesnot support multipass feature");
 #endif
 #if ENABLE_SCC_EXT
     CHECK(!!param->bEnableSCC&& param->rdLevel != 6, "Enabling scc extension in x265 requires rdlevel of 6 ");

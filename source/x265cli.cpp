@@ -804,7 +804,7 @@ namespace X265_NS {
                 OPT("frames") this->framesToBeEncoded = (uint32_t)x265_atoi(optarg, bError);
                 OPT("no-progress") this->bProgress = false;
                 OPT("output") outputfn = optarg;
-                OPT("input") inputfn[0] = optarg;
+                OPT("input") strcpy(inputfn[0] , optarg);
                 OPT("recon") reconfn[0] = optarg;
                 OPT("input-depth") inputBitDepth = (uint32_t)x265_atoi(optarg, bError);
                 OPT("dither") this->bDither = true;
@@ -1080,7 +1080,7 @@ namespace X265_NS {
             x265_log(param, X265_LOG_ERROR, "recon file must be specified to get VMAF score, try --help for help\n");
             return true;
         }
-        const char *str = strrchr(info.filename, '.');
+        const char *str = strrchr(info[0].filename, '.');
 
         if (!strcmp(str, ".y4m"))
         {
@@ -1089,8 +1089,8 @@ namespace X265_NS {
         }
         if (param->internalCsp == X265_CSP_I420 || param->internalCsp == X265_CSP_I422 || param->internalCsp == X265_CSP_I444)
         {
-            vmafData->reference_file = x265_fopen(inputfn, "rb");
-            vmafData->distorted_file = x265_fopen(reconfn, "rb");
+            vmafData->reference_file = x265_fopen(inputfn[0], "rb");
+            vmafData->distorted_file = x265_fopen(reconfn[0], "rb");
         }
         else
         {
@@ -1105,6 +1105,15 @@ namespace X265_NS {
             return true;
         }
         general_log_file(param, this->output->getName(), X265_LOG_INFO, "output file: \"%s\" \n", outputfn);
+
+        for (int view = 0; view < MAX_VIEWS; view++)
+        {
+            if (inputfn[view] != NULL)
+            {
+                X265_FREE(inputfn[view]);
+                inputfn[view] = NULL;
+            }
+        }
         return false;
     }
 

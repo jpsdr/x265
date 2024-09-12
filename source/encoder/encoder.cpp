@@ -2229,6 +2229,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
                     frameEnc[layer]->m_lowres.sliceType = baseViewType;
                 else if(m_param->numViews > 1)
                     frameEnc[layer]->m_lowres.sliceType = IS_X265_TYPE_I(baseViewType) ? X265_TYPE_P : baseViewType;
+                frameEnc[layer]->m_lowres.bKeyframe = frameEnc[0]->m_lowres.bKeyframe;
+                frameEnc[layer]->m_tempLayer = frameEnc[0]->m_tempLayer;
             }
 #endif
 
@@ -2324,6 +2326,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
                     slice->m_endCUAddr = slice->realEndAddress(m_sps.numCUsInFrame * m_param->num4x4Partitions);
                 }
                 frameEnc[layer]->m_valid = true;
+                int baseViewType = frameEnc[0]->m_lowres.sliceType;
+                frameEnc[layer]->m_encData->m_slice->m_origSliceType = IS_X265_TYPE_B(baseViewType) ? B_SLICE : (baseViewType == X265_TYPE_P) ? P_SLICE : I_SLICE;
             }
             if (m_param->analysisLoad && m_param->bDisableLookahead)
             {
@@ -2428,9 +2432,12 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
             if (m_param->bEnableTemporalSubLayers > 2)
             {
                 //Re-assign temporalid if the current frame is at the end of encode or when I slice is encountered
-                if ((frameEnc[0]->m_poc == (m_param->totalFrames - 1)) || (frameEnc[0]->m_lowres.sliceType == X265_TYPE_I) || (frameEnc[0]->m_lowres.sliceType == X265_TYPE_IDR))
+                for (int layer = 0; layer < m_param->numLayers; layer++)
                 {
-                    frameEnc[0]->m_tempLayer = (int8_t)0;
+                    if ((frameEnc[layer]->m_poc == (m_param->totalFrames - 1)) || (frameEnc[layer]->m_lowres.sliceType == X265_TYPE_I) || (frameEnc[layer]->m_lowres.sliceType == X265_TYPE_IDR))
+                    {
+                        frameEnc[layer]->m_tempLayer = (int8_t)0;
+                    }
                 }
             }
             /* determine references, setup RPS, etc */
@@ -3533,6 +3540,8 @@ void Encoder::initVPS(VPS *vps)
         vps->m_nuhLayerIdPresentFlag = 1;
         vps->m_viewIdLen = 0;
         vps->m_vpsNumLayerSetsMinus1 = 1;
+        vps->m_numLayersInIdList[0] = 1;
+        vps->m_numLayersInIdList[1] = 2;
     }
 #endif
 
@@ -3573,13 +3582,12 @@ void Encoder::initVPS(VPS *vps)
         }
         vps->m_dimensionIdLen[1] = auxDimIdLen;
 
-        vps->m_nuhLayerIdPresentFlag = 0;
+        vps->m_nuhLayerIdPresentFlag = 1;
         vps->m_viewIdLen = 1;
 
-        vps->m_viewId[0] = 1;
-        vps->m_viewId[1] = 0;
-
         vps->m_vpsNumLayerSetsMinus1 = 1;
+        vps->m_numLayersInIdList[0] = 1;
+        vps->m_numLayersInIdList[1] = 2;
     }
 #endif
 }
@@ -3668,15 +3676,19 @@ void Encoder::initSPS(SPS *sps)
     sps->sps_extension_flag = false;
 
 #if ENABLE_MULTIVIEW
+    sps->setSpsExtOrMaxSubLayersMinus1 = sps->maxTempSubLayers - 1;
+    sps->maxViews = m_param->numViews;
     if (m_param->numViews > 1)
     {
         sps->sps_extension_flag = true;
         sps->setSpsExtOrMaxSubLayersMinus1 = 7;
-        sps->maxViews = m_param->numViews;
     }
 #endif
 
-    sps->sps_extension_flag = m_param->bEnableSCC ? true : false;
+#if ENABLE_SCC_EXT
+    if(m_param->bEnableSCC)
+        sps->sps_extension_flag = true;
+#endif
 
 }
 
