@@ -405,7 +405,14 @@ int x265_encoder_reconfig_zone(x265_encoder* enc, x265_zone* zone_in)
 
     return 0;
 }
-
+void x265_configure_vbv_end(x265_encoder* enc, x265_picture* picture, double totalstreamduration)
+{
+    Encoder* encoder = static_cast<Encoder*>(enc);
+    if ((totalstreamduration > 0) && (picture->poc) > ((encoder->m_param->vbvEndFrameAdjust)*(totalstreamduration)*((double)(encoder->m_param->fpsNum / encoder->m_param->fpsDenom))))
+    {
+         picture->vbvEndFlag = 1;
+    }
+}
 int x265_encoder_encode(x265_encoder *enc, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out)
 {
     if (!enc)
@@ -1000,6 +1007,7 @@ void x265_picture_init(x265_param *param, x265_picture *pic)
     pic->rpu.payloadSize = 0;
     pic->rpu.payload = NULL;
     pic->picStruct = 0;
+    pic->vbvEndFlag = 0;
 
     if ((param->analysisSave || param->analysisLoad) || (param->bAnalysisType == AVC_INFO))
     {
@@ -1066,6 +1074,7 @@ static const x265_api libapi =
     &x265_encoder_reconfig,
     &x265_encoder_reconfig_zone,
     &x265_encoder_headers,
+    &x265_configure_vbv_end,
     &x265_encoder_encode,
     &x265_encoder_get_stats,
     &x265_encoder_log,
