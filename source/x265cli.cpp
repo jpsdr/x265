@@ -467,6 +467,7 @@ namespace X265_NS {
         H1("    4 - encoder abort\n");
         H0("\nSEI Message Options\n");
         H0("   --film-grain <filename>       File containing Film Grain Characteristics to be written as a SEI Message\n");
+        H0("   --aom-film-grain <filename>   File containing Aom Film Grain Characteristics to be written as a SEI Message\n");
 
 #undef OPT
 #undef H0
@@ -892,11 +893,16 @@ namespace X265_NS {
             }
         }
 
-        if (param->numViews < 2)
+#if !ENABLE_MULTIVIEW
+            if (optind < argc && !(*inputfn[0]))
+                strncpy(inputfn[0], argv[optind++], 1024);
+#else
+        if (!this->multiViewConfig)
         {
             if (optind < argc && !(*inputfn[0]))
                 strncpy(inputfn[0], argv[optind++], 1024);
         }
+#endif
         if (optind < argc && !outputfn)
             outputfn = argv[optind++];
         if (optind < argc)

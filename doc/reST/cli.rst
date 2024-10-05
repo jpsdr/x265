@@ -25,7 +25,9 @@ there are two extra arguments, the second is treated as the output
 bitstream filename, making :option:`--output` also optional if the input
 filename was implied. This makes :command:`x265 in.y4m out.hevc` a valid
 command line. If there are more than two extra arguments, the CLI will
-consider this an error and abort.
+consider this an error and abort. For Multiview encodes i.e encodes with
+:option:`--multiview-config` , only one extra command line argument is
+allowed and the CLI will treat it as the output filename.
 
 Generally, when an option expects a string value from a list of strings
 the user may specify the integer ordinal of the value they desire. ie:
@@ -1323,6 +1325,8 @@ Temporal / motion search options
 	picture, thereby generating multiple motion-compensated predictions, which are then
 	combined by using adaptive filtering to produce a final noise-reduced picture.
 	Default: disabled
+
+	Note : MCSTF should be enabled only with frame threads 1
 
 Spatial/intra options
 =====================
@@ -2738,6 +2742,10 @@ Bitstream options
 
     Refers to the film grain model characteristics for signal enhancement information transmission.
 
+.. option:: --aom-film-grain <filename>
+
+	Refers to the AOM film grain model characteristics
+
     **CLI_ONLY**
 
 DCT Approximations
@@ -2966,7 +2974,8 @@ Multiview Encode Options
 
 
 	Other input parameters such as input-csp/input-depth/input-res/fps must be configured through
-	normal CLI and is expected to be same for all views.
+	normal CLI and is expected to be same for all views. The input filename(s):option:`--input` alone will be inferred
+	from the config file.
 
 **CLI_ONLY**
 
