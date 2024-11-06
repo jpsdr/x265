@@ -730,7 +730,7 @@ bool RateControl::init(const SPS& sps)
                         char bUsed[40];
                         memset(deltaPOC, 0, sizeof(deltaPOC));
                         memset(bUsed, 0, sizeof(bUsed));
-                        e += sscanf(p, " in:%*d out:%*d type:%c q:%lf q-aq:%lf q-noVbv:%lf q-Rceq:%lf tex:%d mv:%d misc:%d icu:%lf pcu:%lf scu:%lf nump:%d numnegp:%d numposp:%d deltapoc:%s bused:%s",
+                        e += sscanf(p, " in:%*d out:%*d type:%c q:%lf q-aq:%lf q-noVbv:%lf q-Rceq:%lf tex:%d mv:%d misc:%d icu:%lf pcu:%lf scu:%lf nump:%d numnegp:%d numposp:%d deltapoc:%127s bused:%39s",
                             &picType, &qpRc, &qpAq, &qNoVbv, &qRceq, &rce->coeffBits,
                             &rce->mvBits, &rce->miscBits, &rce->iCuCount, &rce->pCuCount,
                             &rce->skipCuCount, &rce->rpsData.numberOfPictures, &rce->rpsData.numberOfNegativePictures, &rce->rpsData.numberOfPositivePictures, deltaPOC, bUsed);
@@ -3418,13 +3418,13 @@ int RateControl::writeRateControlFrameStats(Frame* curFrame, RateControlEntry* r
         char bUsed[40];
         memset(deltaPOC, 0, sizeof(deltaPOC));
         memset(bUsed, 0, sizeof(bUsed));
-        sprintf(deltaPOC, "deltapoc:~");
-        sprintf(bUsed, "bused:~");
+        snprintf(deltaPOC, sizeof(deltaPOC), "deltapoc:~");
+        snprintf(bUsed, sizeof(bUsed), "bused:~");
 
         for (i = 0; i < num; i++)
         {
-            sprintf(deltaPOC, "%s%d~", deltaPOC, rpsWriter->deltaPOC[i]);
-            sprintf(bUsed, "%s%d~", bUsed, rpsWriter->bUsed[i]);
+            snprintf(deltaPOC + strlen(deltaPOC), sizeof(deltaPOC) - strlen(deltaPOC), "%d~", rpsWriter->deltaPOC[i]);
+            snprintf(bUsed + strlen(bUsed), sizeof(bUsed) - strlen(bUsed), "%d~", rpsWriter->bUsed[i]);
         }
 
         if (fprintf(m_statFileOut,
