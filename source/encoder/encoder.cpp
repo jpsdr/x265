@@ -138,6 +138,7 @@ Encoder::Encoder()
     m_outputCount = 0;
     m_param = NULL;
     m_latestParam = NULL;
+    m_templateParam = NULL;
     m_threadPool = NULL;
     m_analysisFileIn = NULL;
     m_analysisFileOut = NULL;
@@ -171,7 +172,6 @@ Encoder::Encoder()
     m_startPoint = 0;
     m_saveCTUSize = 0;
     m_zoneIndex = 0;
-    m_origPicBuffer = 0;
 }
 
 inline char *strcatFilename(const char *input, const char *suffix)
@@ -255,7 +255,7 @@ void Encoder::create()
         p->bEnableWavefront = 0;
     }
 
-    bool allowPools = !p->numaPools || strcmp(p->numaPools, "none");
+    bool allowPools = !strlen(p->numaPools) || strcmp(p->numaPools, "none");
 
     // Trim the thread pool if --wpp, --pme, and --pmode are disabled
     if (!p->bEnableWavefront && !p->bDistributeModeAnalysis && !p->bDistributeMotionEstimation && !p->lookaheadSlices)
@@ -336,7 +336,7 @@ void Encoder::create()
         m_aborted = true;
         return;
     }
-    else if (!m_param->scalingLists || !strcmp(m_param->scalingLists, "off"))
+    else if (!strlen(m_param->scalingLists) || !strcmp(m_param->scalingLists, "off"))
         m_scalingList.m_bEnabled = false;
     else if (!strcmp(m_param->scalingLists, "default"))
         m_scalingList.setDefaultScalingList();
@@ -361,9 +361,6 @@ void Encoder::create()
             lookAheadThreadPool[i].start();
     m_lookahead->m_numPools = pools;
     m_dpb = new DPB(m_param);
-
-    if (m_param->bEnableTemporalFilter)
-        m_origPicBuffer = new OrigPicBuffer();
 
     m_rateControl = new RateControl(*m_param, this);
     if (!m_param->bResetZoneConfig)
@@ -478,7 +475,7 @@ void Encoder::create()
         m_aborted = true;
 
     initRefIdx();
-    if (m_param->analysisSave && m_param->bUseAnalysisFile)
+    if (strlen(m_param->analysisSave) && m_param->bUseAnalysisFile)
     {
         char* temp = strcatFilename(m_param->analysisSave, ".temp");
         if (!temp)
@@ -498,7 +495,7 @@ void Encoder::create()
     if (m_param->analysisMultiPassRefine || m_param->analysisMultiPassDistortion)
     {
         const char* name = m_param->analysisReuseFileName;
-        if (!name)
+        if (!strlen(name))
             name = defaultAnalysisFileName;
         if (m_param->rc.bStatWrite)
         {
@@ -550,7 +547,7 @@ void Encoder::create()
 
     m_nalList.m_annexB = !!m_param->bAnnexB;
 
-    if (m_param->naluFile)
+    if (strlen(m_param->naluFile))
     {
         m_naluFile = x265_fopen(m_param->naluFile, "r");
         if (!m_naluFile)
@@ -938,9 +935,6 @@ void Encoder::destroy()
         delete[] zoneWriteCount;
     }
 
-    if (m_param->bEnableTemporalFilter)
-        delete m_origPicBuffer;
-
     if (m_rateControl)
     {
         m_rateControl->destroy();
@@ -950,12 +944,17 @@ void Encoder::destroy()
     X265_FREE(m_offsetEmergency);
 
     if (m_latestParam != NULL && m_latestParam != m_param)
-    {
-        if (m_latestParam->scalingLists != m_param->scalingLists)
-            free((char*)m_latestParam->scalingLists);
-
         PARAM_NS::x265_param_free(m_latestParam);
+
+    if (m_zoneParam != NULL && m_zoneParam != m_param)
+        PARAM_NS::x265_param_free(m_zoneParam);
+
+    if (m_templateParam != NULL && m_templateParam != m_param){
+        // TODO: we don't free zone here because it is overwrite into m_zoneParam in x265_encoder_open
+        m_templateParam->rc.zonefileCount = m_templateParam->rc.zoneCount = 0;
+        PARAM_NS::x265_param_free(m_templateParam);
     }
+
     if (m_analysisFileIn)
         fclose(m_analysisFileIn);
 
@@ -963,8 +962,8 @@ void Encoder::destroy()
     {
         int bError = 1;
         fclose(m_analysisFileOut);
-        const char* name = m_param->analysisSave ? m_param->analysisSave : m_param->analysisReuseFileName;
-        if (!name)
+        const char* name = strlen(m_param->analysisSave) ? m_param->analysisSave : m_param->analysisReuseFileName;
+        if (!strlen(name))
             name = defaultAnalysisFileName;
         char* temp = strcatFilename(name, ".temp");
         if (temp)
@@ -992,19 +991,6 @@ void Encoder::destroy()
     {
         if (m_param->csvfpt)
             fclose(m_param->csvfpt);
-        /* release string arguments that were strdup'd */
-        free((char*)m_param->rc.lambdaFileName);
-        free((char*)m_param->rc.statFileName);
-        free((char*)m_param->rc.sharedMemName);
-        free((char*)m_param->analysisReuseFileName);
-        free((char*)m_param->scalingLists);
-        free((char*)m_param->csvfn);
-        free((char*)m_param->numaPools);
-        free((char*)m_param->masteringDisplayColorVolume);
-        free((char*)m_param->toneMapFile);
-        free((char*)m_param->analysisSave);
-        free((char*)m_param->analysisLoad);
-        free((char*)m_param->videoSignalTypePreset);
         PARAM_NS::x265_param_free(m_param);
     }
 }
@@ -1411,72 +1397,6 @@ bool Encoder::isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType)
     return ((sliceTypeConfig & newSliceType) != 0);
 }
 
-inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Frame* curFrame, bool isPreFiltered, int16_t i)
-{
-    TemporalFilterRefPicInfo* dest = &curframeEncoder->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
-    dest->picBuffer = iterFrame->m_fencPic;
-    dest->picBufferSubSampled2 = iterFrame->m_fencPicSubsampled2;
-    dest->picBufferSubSampled4 = iterFrame->m_fencPicSubsampled4;
-    dest->isFilteredFrame = isPreFiltered;
-    dest->isSubsampled = iterFrame->m_isSubSampled;
-    dest->origOffset = i;
-    curFrame->m_mcstf->m_numRef++;
-
-    return 1;
-}
-
-bool Encoder::generateMcstfRef(Frame* frameEnc, FrameEncoder* currEncoder)
-{
-    frameEnc->m_mcstf->m_numRef = 0;
-
-    for (int iterPOC = (frameEnc->m_poc - frameEnc->m_mcstf->m_range);
-        iterPOC <= (frameEnc->m_poc + frameEnc->m_mcstf->m_range); iterPOC++)
-    {
-        bool isFound = false;
-        if (iterPOC != frameEnc->m_poc)
-        {
-            //search for the reference frame in the Original Picture Buffer
-            if (!isFound)
-            {
-                for (int j = 0; j < (2 * frameEnc->m_mcstf->m_range); j++)
-                {
-                    if (iterPOC < 0)
-                        continue;
-                    if (iterPOC >= m_pocLast)
-                    {
-
-                        TemporalFilter* mcstf = frameEnc->m_mcstf;
-                        while (mcstf->m_numRef)
-                        {
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs0,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs1,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs2,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs,   0, sizeof(MV) * ((mcstf->m_sourceWidth /  4) * (mcstf->m_sourceHeight /  4)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-
-                            mcstf->m_numRef--;
-                        }
-
-                        break;
-                    }
-                    Frame* iterFrame = frameEnc->m_encData->m_slice->m_mcstfRefFrameList[1][j];
-                    if (iterFrame->m_poc == iterPOC)
-                    {
-                        if (!enqueueRefFrame(currEncoder, iterFrame, frameEnc, false, (int16_t)(iterPOC - frameEnc->m_poc)))
-                        {
-                            return false;
-                        };
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
 /**
  * Feed one new input frame into the encoder, get one frame out. If pic_in is
  * NULL, a flush condition is implied and pic_in must be NULL for all subsequent
@@ -1507,7 +1427,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
     if (*m_exportedPic)
     {
-        if (!m_param->bUseAnalysisFile && m_param->analysisSave)
+        if (!m_param->bUseAnalysisFile && strlen(m_param->analysisSave))
             x265_free_analysis_data(m_param, &m_exportedPic[0]->m_analysisData);
 
         for (int i = 0; i < m_param->numLayers; i++)
@@ -1518,7 +1438,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
         m_dpb->recycleUnreferenced();
 
         if (m_param->bEnableTemporalFilter)
-            m_origPicBuffer->recycleOrigPicList();
+            m_lookahead->m_origPicBuf->recycleOrigPicList();
     }
 
     if ((pic_in && (!m_param->chunkEnd || (m_encodedFrameNum < m_param->chunkEnd))) || (m_param->bEnableFrameDuplication && !pic_in && (read < written)))
@@ -1608,7 +1528,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 inputPic[view] = pic_in + view;
         }
 
-        x265_param* p = (m_reconfigure || m_reconfigureRc) ? m_latestParam : m_param;
+        x265_param* p = (m_reconfigure || m_reconfigureRc || m_param->bConfigRCFrame) ? m_latestParam : m_param;
         Frame* inFrame[MAX_LAYERS];
         for (int layer = 0; layer < m_param->numLayers; layer++)
         {
@@ -1750,8 +1670,17 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
 
             inFrame[layer]->m_forceqp = inputPic[0]->forceqp;
-            inFrame[layer]->m_param = (m_reconfigure || m_reconfigureRc) ? m_latestParam : m_param;
+            inFrame[layer]->m_param = (m_reconfigure || m_reconfigureRc || m_param->bConfigRCFrame) ? m_latestParam : m_param;
             inFrame[layer]->m_picStruct = inputPic[0]->picStruct;
+
+            /*Copy reconfigured RC parameters to frame*/
+            if (m_param->rc.rateControlMode == X265_RC_ABR)
+                inFrame[layer]->m_targetBitrate = inFrame[layer]->m_param->rc.bitrate;
+            else if (m_param->rc.rateControlMode == X265_RC_CRF)
+                inFrame[layer]->m_targetCrf = inFrame[layer]->m_param->rc.rfConstant;
+            else if (m_param->rc.rateControlMode == X265_RC_CQP)
+                inFrame[layer]->m_targetQp = inFrame[layer]->m_param->rc.qp;
+
             if (m_param->bField && m_param->interlaceMode)
                 inFrame[layer]->m_fieldNum = inputPic[0]->fieldNum;
 
@@ -1799,7 +1728,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
         /* In analysisSave mode, x265_analysis_data is allocated in inputPic and inFrame points to this */
         /* Load analysis data before lookahead->addPicture, since sliceType has been decided */
-        if (m_param->analysisLoad)
+        if (strlen(m_param->analysisLoad))
         {
             /* reads analysis data for the frame and allocates memory based on slicetype */
             static int paramBytes = CONF_OFFSET_BYTES;
@@ -1888,7 +1817,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
         }
 
-        if (m_reconfigureRc)
+        if (m_reconfigureRc || m_param->bConfigRCFrame)
             inFrame[0]->m_reconfigureRc = true;
 
         if (m_param->bEnableTemporalFilter)
@@ -1922,7 +1851,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                                 dupFrame->m_fencPic->m_cuOffsetC = m_sps.cuOffsetC;
                                 dupFrame->m_fencPic->m_buOffsetC = m_sps.buOffsetC;
                             }
-                            m_origPicBuffer->addEncPicture(dupFrame);
+                            m_lookahead->m_origPicBuf->addEncPicture(dupFrame);
                         }
                     }
                 }
@@ -1941,7 +1870,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             extendPicBorder(orig->m_picOrg[2], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
 
             //TODO: Add subsampling here if required
-            m_origPicBuffer->addPicture(inFrame[0]);
+            inFrame[0]->m_mcstffencPic->copyFromFrame(inFrame[0]->m_fencPic);
+            m_lookahead->m_origPicBuf->addPicture(inFrame[0]);;
         }
 
         m_lookahead->addPicture(*inFrame[0], sliceType);
@@ -1990,7 +1920,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 x265_frame_stats* frameData = NULL;
 
                 /* Free up inputPic->analysisData since it has already been used */
-                if ((m_param->analysisLoad && !m_param->analysisSave) || ((m_param->bAnalysisType == AVC_INFO) && slice->m_sliceType != I_SLICE))
+                if ((strlen(m_param->analysisLoad) && !strlen(m_param->analysisSave)) || ((m_param->bAnalysisType == AVC_INFO) && slice->m_sliceType != I_SLICE))
                     x265_free_analysis_data(m_param, &outFrame->m_analysisData);
                 if (pic_out)
                 {
@@ -2018,7 +1948,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     }
 
                     /* Dump analysis data from pic_out to file in save mode and free */
-                    if (m_param->analysisSave)
+                    if (strlen(m_param->analysisSave))
                     {
                         pic_out[sLayer].analysisData.poc = pic_out[sLayer].poc;
                         pic_out[sLayer].analysisData.sliceType = pic_out[sLayer].sliceType;
@@ -2138,7 +2068,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 if ((m_outputCount + 1) >= m_param->chunkStart)
                     finishFrameStats(outFrame, curEncoder, frameData, m_pocLast, sLayer);
-                if (m_param->analysisSave)
+                if (strlen(m_param->analysisSave))
                 {
                     pic_out[sLayer].analysisData.frameBits = frameData->bits;
                     if (!slice->isIntra())
@@ -2193,11 +2123,11 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 if (m_param->bEnableTemporalFilter)
                 {
-                    Frame* curFrame = m_origPicBuffer->m_mcstfPicList.getPOCMCSTF(outFrame->m_poc);
+                    Frame* curFrame = m_lookahead->m_origPicBuf->m_mcstfPicList.getPOCMCSTF(outFrame->m_poc);
                     X265_CHECK(curFrame, "Outframe not found in DPB's mcstfPicList");
                     curFrame->m_refPicCnt[0]--;
                     curFrame->m_refPicCnt[1]--;
-                    curFrame = m_origPicBuffer->m_mcstfOrigPicList.getPOCMCSTF(outFrame->m_poc);
+                    curFrame = m_lookahead->m_origPicBuf->m_mcstfOrigPicList.getPOCMCSTF(outFrame->m_poc);
                     X265_CHECK(curFrame, "Outframe not found in OPB's mcstfOrigPicList");
                     curFrame->m_refPicCnt[1]--;
                 }
@@ -2208,7 +2138,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     ATOMIC_DEC(&outFrame->m_countRefEncoders);
                     m_dpb->recycleUnreferenced();
                     if (m_param->bEnableTemporalFilter)
-                        m_origPicBuffer->recycleOrigPicList();
+                        m_lookahead->m_origPicBuf->recycleOrigPicList();
                 }
                 else
                     m_exportedPic[sLayer] = outFrame;
@@ -2294,9 +2224,29 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 }
             }
 
-            if (frameEnc[0]->m_reconfigureRc && m_reconfigureRc)
+            if (frameEnc[0]->m_reconfigureRc)
             {
-                x265_copy_params(m_param, m_latestParam);
+                if (m_reconfigureRc)
+                    x265_copy_params(m_param, m_latestParam);
+                else if (m_param->bConfigRCFrame)
+                {
+                    m_rateControl->m_bRcReConfig = true;
+                    if (m_param->rc.rateControlMode == X265_RC_ABR)
+                    {
+                        m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
+                        m_rateControl->m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
+                    }
+                    else if (m_param->rc.rateControlMode == X265_RC_CRF)
+                    {
+                        m_param->rc.rfConstant = (double)frameEnc[0]->m_targetCrf;
+                        m_rateControl->m_param->rc.rfConstant = frameEnc[0]->m_targetCrf;
+                    }
+                    else if (m_param->rc.rateControlMode == X265_RC_CQP)
+                    {
+                        m_param->rc.qp = frameEnc[0]->m_targetQp;
+                        m_rateControl->m_param->rc.qp = frameEnc[0]->m_targetQp;
+                    }
+                }
                 m_rateControl->reconfigureRC();
                 m_reconfigureRc = false;
             }
@@ -2341,7 +2291,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 int baseViewType = frameEnc[0]->m_lowres.sliceType;
                 frameEnc[layer]->m_encData->m_slice->m_origSliceType = IS_X265_TYPE_B(baseViewType) ? B_SLICE : (baseViewType == X265_TYPE_P) ? P_SLICE : I_SLICE;
             }
-            if (m_param->analysisLoad && m_param->bDisableLookahead)
+            if (strlen(m_param->analysisLoad) && m_param->bDisableLookahead)
             {
                 frameEnc[0]->m_dts = frameEnc[0]->m_analysisData.lookahead.dts;
                 frameEnc[0]->m_reorderedPts = frameEnc[0]->m_analysisData.lookahead.reorderedPts;
@@ -2416,7 +2366,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
             curEncoder->m_rce.encodeOrder = frameEnc[0]->m_encodeOrder = m_encodedFrameNum++;
 
-            if (!m_param->analysisLoad || !m_param->bDisableLookahead)
+            if (!strlen(m_param->analysisLoad) || !m_param->bDisableLookahead)
             {
                 if (m_bframeDelay)
                 {
@@ -2431,7 +2381,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
 
             /* Allocate analysis data before encode in save mode. This is allocated in frameEnc[0] */
-            if (m_param->analysisSave && !m_param->analysisLoad)
+            if (strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad))
             {
                 x265_analysis_data* analysis = &frameEnc[0]->m_analysisData;
                 analysis->poc = frameEnc[0]->m_poc;
@@ -2462,10 +2412,11 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
             if (m_param->bEnableTemporalFilter)
             {
-                X265_CHECK(!m_origPicBuffer->m_mcstfOrigPicFreeList.empty(), "Frames not available in Encoded OPB");
+                X265_CHECK(!m_lookahead->m_origPicBuf->m_mcstfOrigPicFreeList.empty(), "Frames not available in Encoded OPB");
 
-                Frame *dupFrame = m_origPicBuffer->m_mcstfOrigPicFreeList.popBackMCSTF();
+                Frame* dupFrame = m_lookahead->m_origPicBuf->m_mcstfOrigPicFreeList.popBackMCSTF();
                 dupFrame->m_fencPic->copyFromFrame(frameEnc[0]->m_fencPic);
+                dupFrame->m_mcstffencPic->copyFromFrame(frameEnc[0]->m_mcstffencPic);
                 dupFrame->m_poc = frameEnc[0]->m_poc;
                 dupFrame->m_encodeOrder = frameEnc[0]->m_encodeOrder;
                 dupFrame->m_refPicCnt[1] = 2 * dupFrame->m_mcstf->m_range + 1;
@@ -2475,8 +2426,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 if (m_param->totalFrames && (dupFrame->m_poc >= (m_param->totalFrames - dupFrame->m_mcstf->m_range)))
                     dupFrame->m_refPicCnt[1] -= (uint8_t)(dupFrame->m_poc + dupFrame->m_mcstf->m_range - m_param->totalFrames + 1);
 
-                m_origPicBuffer->addEncPictureToPicList(dupFrame);
-                m_origPicBuffer->setOrigPicList(frameEnc[0], m_pocLast);
+                m_lookahead->m_origPicBuf->addEncPictureToPicList(dupFrame);
+                m_lookahead->m_origPicBuf->setOrigPicList(frameEnc[0], m_pocLast);
             }
 
             for (int layer = 0; layer < m_param->numLayers; layer++)
@@ -2513,51 +2464,14 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             // Generate MCSTF References and perform HME
             if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc[0]->m_mcstf->m_sliceTypeConfig, frameEnc[0]->m_lowres.sliceType))
             {
-
-                if (!generateMcstfRef(frameEnc[0], curEncoder))
-                {
-                    m_aborted = true;
-                    x265_log(m_param, X265_LOG_ERROR, "Failed to initialize MCSTFReferencePicInfo at POC %d\n", frameEnc[0]->m_poc);
-                    fflush(stderr);
-                    return -1;
-                }
-
-
-                if (!*frameEnc[0]->m_isSubSampled)
-                {
-                    primitives.frameSubSampleLuma((const pixel *)frameEnc[0]->m_fencPic->m_picOrg[0],frameEnc[0]->m_fencPicSubsampled2->m_picOrg[0], frameEnc[0]->m_fencPic->m_stride, frameEnc[0]->m_fencPicSubsampled2->m_stride, frameEnc[0]->m_fencPicSubsampled2->m_picWidth, frameEnc[0]->m_fencPicSubsampled2->m_picHeight);
-                    extendPicBorder(frameEnc[0]->m_fencPicSubsampled2->m_picOrg[0], frameEnc[0]->m_fencPicSubsampled2->m_stride, frameEnc[0]->m_fencPicSubsampled2->m_picWidth, frameEnc[0]->m_fencPicSubsampled2->m_picHeight, frameEnc[0]->m_fencPicSubsampled2->m_lumaMarginX, frameEnc[0]->m_fencPicSubsampled2->m_lumaMarginY);
-                    primitives.frameSubSampleLuma((const pixel *)frameEnc[0]->m_fencPicSubsampled2->m_picOrg[0],frameEnc[0]->m_fencPicSubsampled4->m_picOrg[0], frameEnc[0]->m_fencPicSubsampled2->m_stride, frameEnc[0]->m_fencPicSubsampled4->m_stride, frameEnc[0]->m_fencPicSubsampled4->m_picWidth, frameEnc[0]->m_fencPicSubsampled4->m_picHeight);
-                    extendPicBorder(frameEnc[0]->m_fencPicSubsampled4->m_picOrg[0], frameEnc[0]->m_fencPicSubsampled4->m_stride, frameEnc[0]->m_fencPicSubsampled4->m_picWidth, frameEnc[0]->m_fencPicSubsampled4->m_picHeight, frameEnc[0]->m_fencPicSubsampled4->m_lumaMarginX, frameEnc[0]->m_fencPicSubsampled4->m_lumaMarginY);
-                    *frameEnc[0]->m_isSubSampled = true;
-                }
-
-                for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
-                {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i - 1];
-                    if (!*ref->isSubsampled)
-                    {
-                        primitives.frameSubSampleLuma((const pixel *)ref->picBuffer->m_picOrg[0], ref->picBufferSubSampled2->m_picOrg[0], ref->picBuffer->m_stride, ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled2->m_picWidth, ref->picBufferSubSampled2->m_picHeight);
-                        extendPicBorder(ref->picBufferSubSampled2->m_picOrg[0], ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled2->m_picWidth, ref->picBufferSubSampled2->m_picHeight, ref->picBufferSubSampled2->m_lumaMarginX, ref->picBufferSubSampled2->m_lumaMarginY);
-                        primitives.frameSubSampleLuma((const pixel *)ref->picBufferSubSampled2->m_picOrg[0],ref->picBufferSubSampled4->m_picOrg[0], ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled4->m_stride, ref->picBufferSubSampled4->m_picWidth, ref->picBufferSubSampled4->m_picHeight);
-                        extendPicBorder(ref->picBufferSubSampled4->m_picOrg[0], ref->picBufferSubSampled4->m_stride, ref->picBufferSubSampled4->m_picWidth, ref->picBufferSubSampled4->m_picHeight, ref->picBufferSubSampled4->m_lumaMarginX, ref->picBufferSubSampled4->m_lumaMarginY);
-                        *ref->isSubsampled = true;
-                    }
-                }
-
-                for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
-                {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i - 1];
-
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_fencPicSubsampled4, ref->picBufferSubSampled4, 16);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_fencPicSubsampled2, ref->picBufferSubSampled2, 16, ref->mvs0, ref->mvsStride0, 2);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic, ref->picBuffer, 16, ref->mvs1, ref->mvsStride1, 2);
-                    curEncoder->m_frameEncTF->motionEstimationLumaDoubleRes(ref->mvs,  ref->mvsStride, frameEnc[0]->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
-                }
-
                 for (int i = 0; i < frameEnc[0]->m_mcstf->m_numRef; i++)
                 {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i];
+                    TemporalFilterRefPicInfo* ref = &frameEnc[0]->m_mcstfRefList[i];
+
+                    //Resetting the reference picture buffer from mcstfpiclist
+                    Frame* iterFrame = frameEnc[0]->m_encData->m_slice->m_mcstfRefFrameList[1][i];
+                    ref->picBuffer = iterFrame->m_mcstffencPic;
+
                     ref->slicetype = m_lookahead->findSliceType(frameEnc[0]->m_poc + ref->origOffset);
                     Frame* dpbframePtr = m_dpb->m_picList.getPOC(frameEnc[0]->m_poc + ref->origOffset, 0);
                     if (dpbframePtr != NULL)
@@ -2606,6 +2520,12 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->rc.bitrate = param->rc.bitrate;
         m_reconfigureRc |= encParam->rc.rfConstant != param->rc.rfConstant;
         encParam->rc.rfConstant = param->rc.rfConstant;
+        m_reconfigureRc |= encParam->rc.qp != param->rc.qp;
+        encParam->rc.qp = param->rc.qp;
+
+        /*Allow encoder to reconfigure RC for each input frame*/
+        if (encParam->bConfigRCFrame)
+            m_reconfigureRc = false;
     }
     else
     {
@@ -2625,8 +2545,8 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->bEnableRectInter = param->bEnableRectInter;
         encParam->maxNumMergeCand = param->maxNumMergeCand;
         encParam->bIntraInBFrames = param->bIntraInBFrames;
-        if (param->scalingLists && !encParam->scalingLists)
-            encParam->scalingLists = strdup(param->scalingLists);
+        if (strlen(param->scalingLists) && !strlen(encParam->scalingLists))
+            snprintf(encParam->scalingLists, X265_MAX_STRING_SIZE, "%s", param->scalingLists);
 
         encParam->rc.aqMode = param->rc.aqMode;
         encParam->rc.aqStrength = param->rc.aqStrength;
@@ -2664,7 +2584,8 @@ bool Encoder::isReconfigureRc(x265_param* latestParam, x265_param* param_in)
     return (latestParam->rc.vbvMaxBitrate != param_in->rc.vbvMaxBitrate
         || latestParam->rc.vbvBufferSize != param_in->rc.vbvBufferSize
         || latestParam->rc.bitrate != param_in->rc.bitrate
-        || latestParam->rc.rfConstant != param_in->rc.rfConstant);
+        || latestParam->rc.rfConstant != param_in->rc.rfConstant
+        || latestParam->rc.qp != param_in->rc.qp);
 }
 
 void Encoder::copyCtuInfo(x265_ctu_info_t** frameCtuInfo, int poc)
@@ -3287,6 +3208,9 @@ void Encoder::finishFrameStats(Frame* curFrame, FrameEncoder *curEncoder, x265_f
                     }
                 }
             }
+            frameStats->currTrBitrate = curFrame->m_targetBitrate;
+            frameStats->currTrCRF = curFrame->m_targetCrf;
+            frameStats->currTrQP = curFrame->m_targetQp;
         }
 
         if (m_param->csvLogLevel >= 1)
@@ -3449,7 +3373,7 @@ void Encoder::getStreamHeaders(NALList& list, Entropy& sbacCoder, Bitstream& bs)
             cllsei.writeSEImessages(bs, m_sps, NAL_UNIT_PREFIX_SEI, list, m_param->bSingleSeiNal);
         }
 
-        if (m_param->masteringDisplayColorVolume)
+        if (strlen(m_param->masteringDisplayColorVolume))
         {
             SEIMasteringDisplayColorVolume mdsei;
             if (mdsei.parse(m_param->masteringDisplayColorVolume))
@@ -3792,8 +3716,8 @@ void Encoder::configureZone(x265_param *p, x265_param *zone)
         p->bEnableRectInter = zone->bEnableRectInter;
         p->maxNumMergeCand = zone->maxNumMergeCand;
         p->bIntraInBFrames = zone->bIntraInBFrames;
-        if (zone->scalingLists)
-            p->scalingLists = strdup(zone->scalingLists);
+        if (strlen(zone->scalingLists))
+            snprintf(p->scalingLists, X265_MAX_STRING_SIZE, "%s", zone->scalingLists);
 
         p->rc.aqMode = zone->rc.aqMode;
         p->rc.aqStrength = zone->rc.aqStrength;
@@ -3890,15 +3814,15 @@ void Encoder::configureVideoSignalTypePreset(x265_param* p)
             p->bEmitHDR10SEI = 1;
             if (!strcmp(colorVolume, "P3D65x1000n0005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,5)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,5)");
             }
             else if (!strcmp(colorVolume, "P3D65x4000n005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(40000000,50)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(40000000,50)");
             }
             else if (!strcmp(colorVolume, "BT2100x108n0005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(8500,39850)B(6550,2300)R(34000,146000)WP(15635,16450)L(10000000,1)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(8500,39850)B(6550,2300)R(34000,146000)WP(15635,16450)L(10000000,1)");
             }
             else
             {
@@ -4114,37 +4038,37 @@ void Encoder::configure(x265_param *p)
         p->rc.rfConstantMin = 0;
     }
 
-    if (p->analysisSaveReuseLevel && !p->analysisSave)
+    if (p->analysisSaveReuseLevel && !strlen(p->analysisSave))
     {
         x265_log(p, X265_LOG_WARNING, "analysis-save-reuse-level can be set only when analysis-save is enabled."
             " Resetting analysis-save-reuse-level to 0.\n");
         p->analysisSaveReuseLevel = 0;
     }
 
-    if (p->analysisLoadReuseLevel && !p->analysisLoad)
+    if (p->analysisLoadReuseLevel && !strlen(p->analysisLoad))
     {
         x265_log(p, X265_LOG_WARNING, "analysis-load-reuse-level can be set only when analysis-load is enabled."
             " Resetting analysis-load-reuse-level to 0.\n");
         p->analysisLoadReuseLevel = 0;
     }
 
-    if (p->analysisSave && !p->analysisSaveReuseLevel)
+    if (strlen(p->analysisSave) && !p->analysisSaveReuseLevel)
         p->analysisSaveReuseLevel = 5;
 
-    if (p->analysisLoad && !p->analysisLoadReuseLevel)
+    if (strlen(p->analysisLoad) && !p->analysisLoadReuseLevel)
         p->analysisLoadReuseLevel = 5;
 
-    if ((p->analysisLoad || p->analysisSave) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
+    if ((strlen(p->analysisLoad) || p->analysisSave) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
     {
         x265_log(p, X265_LOG_WARNING, "Analysis load/save options incompatible with pmode/pme, Disabling pmode/pme\n");
         p->bDistributeMotionEstimation = p->bDistributeModeAnalysis = 0;
     }
 
-    if ((p->analysisLoad || p->analysisSave) && (p->analysisMultiPassRefine || p->analysisMultiPassDistortion))
+    if ((strlen(p->analysisLoad) || strlen(p->analysisSave)) && (p->analysisMultiPassRefine || p->analysisMultiPassDistortion))
     {
         x265_log(p, X265_LOG_WARNING, "Cannot use Analysis load/save option and multi-pass-opt-analysis/multi-pass-opt-distortion together,"
             "Disabling Analysis load/save and multi-pass-opt-analysis/multi-pass-opt-distortion\n");
-        p->analysisSave = p->analysisLoad = NULL;
+        p->analysisSave[0] = p->analysisLoad[0] = 0;
         p->analysisMultiPassRefine = p->analysisMultiPassDistortion = 0;
     }
     if (p->scaleFactor)
@@ -4197,12 +4121,12 @@ void Encoder::configure(x265_param *p)
 
     if (p->ctuDistortionRefine == CTU_DISTORTION_INTERNAL)
     {
-        if (!p->analysisLoad && !p->analysisSave)
+        if (!strlen(p->analysisLoad) && !strlen(p->analysisSave))
         {
             x265_log(p, X265_LOG_WARNING, "refine-ctu-distortion 1 requires analysis save/load. Disabling refine-ctu-distortion\n");
             p->ctuDistortionRefine = 0;
         }
-        if (p->scaleFactor && p->analysisLoad)
+        if (p->scaleFactor && strlen(p->analysisLoad))
         {
             x265_log(p, X265_LOG_WARNING, "refine-ctu-distortion 1 cannot be enabled along with multi resolution analysis refinement. Disabling refine-ctu-distortion\n");
             p->ctuDistortionRefine = 0;
@@ -4323,7 +4247,7 @@ void Encoder::configure(x265_param *p)
     p->bEnableTSkipFast &= p->bEnableTransformSkip;
     p->bLimitSAO &= p->bEnableSAO;
 
-    if (m_param->bUseAnalysisFile && m_param->analysisLoad && (p->confWinRightOffset || p->confWinBottomOffset))
+    if (m_param->bUseAnalysisFile && strlen(m_param->analysisLoad) && (p->confWinRightOffset || p->confWinBottomOffset))
         x265_log(p, X265_LOG_WARNING, "It is recommended not to set conformance window offset in file based analysis-load."
                                       " Offsets are shared in the analysis file already.\n");
     /* initialize the conformance window */
@@ -4334,7 +4258,7 @@ void Encoder::configure(x265_param *p)
     m_conformanceWindow.leftOffset = 0;
 
     uint32_t padsize = 0;
-    if (m_param->analysisLoad && m_param->bUseAnalysisFile)
+    if (strlen(m_param->analysisLoad) && m_param->bUseAnalysisFile)
     {
         m_analysisFileIn = x265_fopen(m_param->analysisLoad, "rb");
         if (!m_analysisFileIn)
@@ -4465,19 +4389,19 @@ void Encoder::configure(x265_param *p)
         m_param->bEnableFrameDuplication = 0;
     }
 #ifdef ENABLE_HDR10_PLUS
-    if (m_param->bDhdr10opt && m_param->toneMapFile == NULL)
+    if (m_param->bDhdr10opt && strlen(m_param->toneMapFile) == 0)
     {
         x265_log(p, X265_LOG_WARNING, "Disabling dhdr10-opt. dhdr10-info must be enabled.\n");
         m_param->bDhdr10opt = 0;
     }
 
-    if (m_param->toneMapFile)
+    if (strlen(m_param->toneMapFile))
     {
         if (!x265_fopen(p->toneMapFile, "r"))
         {
             x265_log(p, X265_LOG_ERROR, "Unable to open tone-map file.\n");
             m_bToneMap = 0;
-            m_param->toneMapFile = NULL;
+            m_param->toneMapFile[0] = 0;
             m_aborted = true;
         }
         else
@@ -4486,11 +4410,11 @@ void Encoder::configure(x265_param *p)
     else
         m_bToneMap = 0;
 #else
-    if (m_param->toneMapFile)
+    if (strlen(m_param->toneMapFile))
     {
         x265_log(p, X265_LOG_WARNING, "--dhdr10-info disabled. Enable HDR10_PLUS in cmake.\n");
         m_bToneMap = 0;
-        m_param->toneMapFile = NULL;
+        m_param->toneMapFile[0] = 0;
     }
     else if (m_param->bDhdr10opt)
     {
@@ -4641,7 +4565,7 @@ void Encoder::configure(x265_param *p)
         p->maxSlices = slicesLimit;
     }
 	
-    if (p->videoSignalTypePreset)     // Default disabled.
+    if (strlen(p->videoSignalTypePreset))     // Default disabled.
         configureVideoSignalTypePreset(p);
 	
     if (p->bHDR10Opt)
@@ -4658,7 +4582,7 @@ void Encoder::configure(x265_param *p)
         }
     }
 
-    if (m_param->toneMapFile || p->bHDR10Opt || p->bEmitHDR10SEI)
+    if (strlen(m_param->toneMapFile) || p->bHDR10Opt || p->bEmitHDR10SEI)
     {
         if (!p->bRepeatHeaders && p->bAnnexB)
         {
@@ -6257,7 +6181,9 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
         int payloadType = atoi(strtok(NULL, " "));
         char *base64Encode = strtok(NULL, "\n");
         int base64EncodeLength = (int)strlen(base64Encode);
-        char *base64Decode = SEI::base64Decode(base64Encode, base64EncodeLength);
+        char* decodedString;
+        decodedString = (char*)malloc(sizeof(char) * (base64EncodeLength));
+        char *base64Decode = SEI::base64Decode(base64Encode, base64EncodeLength, decodedString);
         if (nalType == NAL_UNIT_PREFIX_SEI && (!strcmp(prefix, "PREFIX")))
         {
             int currentPOC = curPoc;
@@ -6280,6 +6206,7 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
                     break;
                 }
                 memcpy(seiMsg.payload, base64Decode, seiMsg.payloadSize);
+                free(decodedString);
                 break;
             }
         }
@@ -6288,6 +6215,8 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
             x265_log(m_param, X265_LOG_WARNING, "SEI message for frame %d is not inserted. Will support only PREFIX SEI messages.\n", poc);
             break;
         }
+        if (base64Decode)
+            free(base64Decode);
     }
 }
 
