@@ -1344,7 +1344,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     {
         if (0) ;
         OPT("csv") snprintf(p->csvfn, X265_MAX_STRING_SIZE, "%s", value);
-        OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value)
+        OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value);
         OPT("log-file-level")
         {
             p->logfLevel = atoi(value);
