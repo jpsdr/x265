@@ -151,7 +151,7 @@ void x265_param_default(x265_param* param)
     param->frameNumThreads = 0;
 
     param->logLevel = X265_LOG_INFO;
-    param->logfn = NULL;
+    param->logfn[0] = 0;
     param->logfLevel = X265_LOG_INFO;
     param->csvLogLevel = 0;
     param->csvfn[0] = 0;
@@ -1344,6 +1344,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     {
         if (0) ;
         OPT("csv") snprintf(p->csvfn, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value);
         OPT("log-file-level")
         {
@@ -1354,7 +1355,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
                 p->logfLevel = parseName(value, logLevelNames, bError) - 1;
             }
         }
-        OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("qpmin") p->rc.qpMin = atoi(value);
         OPT("analyze-src-pics") p->bSourceReferenceEstimation = atobool(value);
         OPT("log2-max-poc-lsb") p->log2MaxPocLsb = atoi(value);
@@ -2783,7 +2783,8 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bEnablePsnr = src->bEnablePsnr;
     dst->bEnableSsim = src->bEnableSsim;
     dst->logLevel = src->logLevel;
-    dst->logfn = src->logfn;
+    if (strlen(src->logfn)) snprintf(dst->logfn, X265_MAX_STRING_SIZE, "%s", src->logfn);
+    else dst->logfn[0] = 0;
     dst->logfLevel = src->logfLevel;
     dst->csvLogLevel = src->csvLogLevel;
     if (strlen(src->csvfn)) snprintf(dst->csvfn, X265_MAX_STRING_SIZE, "%s", src->csvfn);
