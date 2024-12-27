@@ -1649,6 +1649,13 @@ typedef struct x265_param
      * value must be between 0 and 50, 1.0 is typical. Default 0 */
     double    psyRdoq;
 
+    /* The Psycho-visual rate-distortion strength is scaled differently
+     * for B-, P- and I-slices. Values must be integers between 96 and 300
+     * Default is 300 for B-, 256 for P- and 96 for I-slices */
+    int       psyScaleB;
+    int       psyScaleP;
+    int       psyScaleI;
+
     /* Perform quantisation parameter based RD refinement. RD cost is calculated
      * on the best CU partitions, chosen after the CU analysis, for a range of QPs
      * to find the optimal rounding effect. Only effective at rd-levels 5 and 6.
@@ -1713,6 +1720,18 @@ typedef struct x265_param
          * Default value is 0.6. Increasing it to 1 will effectively generate CQP */
         double    qCompress;
 
+        /* Weight given to cutree Adaptive Quantization (0 to 3.0). By default, it is calculated from
+         * qCompress and weights differently when hevc-aq is enabled/disabled
+         * - hevc-aq enabled:   6.0 * (1.0 - qcomp)
+         * - hevc-aq disabled:  5.0 * (1.0 - qcomp)                            */
+        double    cuTreeStrength;
+
+        /* Sets hard lower/upper QpOffset allowed for cutree Adaptive Quantization
+         * Default cuTreeMinQpOffset: -69 (no limit)
+         * Default cuTreeMaxQpOffset:  69 (no limit) */
+        double cuTreeMinQpOffset;
+        double cuTreeMaxQpOffset;
+
         /* QP offset between I/P and P/B frames. Default ipfactor: 1.4
          * Default pbFactor: 1.3 */
         double    ipFactor;
@@ -1722,6 +1741,15 @@ typedef struct x265_param
          * Acceptable values between 0 and 51. Default value: 28 */
         double    rfConstant;
 
+        /* qScale Mode: overrides how rate control will estimate quant/qScale
+         * Acceptable values are 0,1,2
+         * Mode 0 (default): not overriding the original logic in rate control
+         * Mode 1: Uses frame duration as basis of estimation (default for --cutree)
+         * Mode 2: Uses frame complexity as basis of (default for --no-cutree and --hevc-aq)
+         * Mode 3: Minimum(Mode1, Mode2)
+         * Mode 4: Maximum(Mode1, Mode2) */
+        int       qScaleMode;
+
         /* Max QP difference between frames. Default: 4 */
         int       qpStep;
 
@@ -1730,6 +1758,11 @@ typedef struct x265_param
          * this ON will usually affect PSNR negatively, however SSIM and visual quality
          * generally improves. Default: X265_AQ_AUTO_VARIANCE */
         int       aqMode;
+
+        /* Use QP offset determined by aq-mode 1 (uniform AQ) as hard upper limit on
+         * QP offset allowed in aq-mode 2-5. This (might) help in scenes with large
+         * complexity differences among blocks.  Default: disabled */
+        int       limitAq1;
 
         /*
          * Enable adaptive quantization.
@@ -1753,6 +1786,10 @@ typedef struct x265_param
         /* Sets the bias towards dark scenes in AQ mode 5. */
         double    aqBiasStrengthEdge;
         bool      aqBiasStrengthEdge_b;
+
+        /* Sets the aq-strength aq-mode 1 when limit-aq1 is enabled. Valid only if
+         * limit-aq1 is enabled. Default value: 1.0. Acceptable values between 0.0 and 3.0 */
+        double    limitAq1Strength;
 
         /* Disable Gaussian blur in AQ modes 4 & 5. */
         int       aqFastEdge;

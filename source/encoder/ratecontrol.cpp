@@ -3197,7 +3197,18 @@ double RateControl::getQScale(RateControlEntry *rce, double rateFactor)
 {
     double q;
 
-    if (m_param->rc.cuTree && !m_param->rc.hevcAq)
+    if (m_param->rc.qScaleMode == 3 || m_param->rc.qScaleMode == 4)
+    {
+        // Scale and units are obtained from rateNum and rateDenom for videos with fixed frame rates.
+        double timescale = (double)m_param->fpsDenom / (2 * m_param->fpsNum);
+        double q1 = pow(BASE_FRAME_DURATION / CLIP_DURATION(2 * timescale), 1 - m_param->rc.qCompress);
+        double q2 = pow(rce->blurredComplexity, 1 - m_param->rc.qCompress);
+        if (m_param->rc.qScaleMode == 3)
+            q = X265_MIN(q1, q2);
+        else
+            q = X265_MAX(q1, q2);
+    }
+    else if (m_param->rc.qScaleMode == 1 || (m_param->rc.cuTree && !m_param->rc.hevcAq && m_param->rc.qScaleMode == 0))
     {
         // Scale and units are obtained from rateNum and rateDenom for videos with fixed frame rates.
         double timescale = (double)m_param->fpsDenom / (2 * m_param->fpsNum);

@@ -42,10 +42,19 @@ public:
     uint32_t  m_psyRdBase;
     uint32_t  m_psyRd;
     uint32_t  m_ssimRd;
+    uint32_t  m_psyScaleFix8_B;
+    uint32_t  m_psyScaleFix8_P;
+    uint32_t  m_psyScaleFix8_I;
     int       m_qp; /* QP used to configure lambda, may be higher than QP_MAX_SPEC but <= QP_MAX_MAX */
 
     void setPsyRdScale(double scale)                { m_psyRdBase = (uint32_t)floor(65536.0 * scale * 0.33); }
     void setSsimRd(int ssimRd) { m_ssimRd = ssimRd; };
+    void setPsyScaleFix8(int B, int P, int I)
+    {
+        m_psyScaleFix8_B = B;
+        m_psyScaleFix8_P = P;
+        m_psyScaleFix8_I = I;
+    }
 
     void setQP(const Slice& slice, int qp)
     {
@@ -54,7 +63,8 @@ public:
         setLambda(x265_lambda2_tab[qp], x265_lambda_tab[qp]);
 
         /* Scale PSY RD factor by a slice type factor */
-        static const uint32_t psyScaleFix8[3] = { 300, 256, 96 }; /* B, P, I */
+        /* static const uint32_t psyScaleFix8[3] = { 300, 256, 96 }; B, P, I */
+        static const uint32_t psyScaleFix8[3] = { m_psyScaleFix8_B, m_psyScaleFix8_P, m_psyScaleFix8_I }; /* B, P, I */
         m_psyRd = (m_psyRdBase * psyScaleFix8[slice.m_sliceType]) >> 8;
 
         /* Scale PSY RD factor by QP, at high QP psy-rd can cause artifacts */

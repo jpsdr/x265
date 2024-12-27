@@ -82,6 +82,7 @@ bool Search::initSearch(const x265_param& param, ScalingList& scalingList)
 
     m_rdCost.setPsyRdScale(param.psyRd);
     m_rdCost.setSsimRd(param.bSsimRd);
+    m_rdCost.setPsyScaleFix8(param.psyScaleB, param.psyScaleP, param.psyScaleI);
     m_me.init(param.internalCsp);
 
     bool ok = m_quant.init(param.psyRdoq, scalingList, m_entropyCoder);

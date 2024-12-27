@@ -151,6 +151,9 @@ namespace X265_NS {
            "                                  - 2:levels & coding groups.\n"
            "                                 Default %d\n", param->rdoqLevel);
         H0("   --[no-]psy-rdoq <0..50.0>     Strength of psycho-visual optimization in RDO quantization, 0 to disable. Default %.1f\n", param->psyRdoq);
+        H0("   --psy-bscale <0..300>        Scaling of psycho-visual optimization in RDO quantization for B-slice. Default %d\n", param->psyScaleB);
+        H0("   --psy-pscale <0..300>        Scaling of psycho-visual optimization in RDO quantization for P-slice. Default %d\n", param->psyScaleP);
+        H0("   --psy-iscale <0..300>        Scaling of psycho-visual optimization in RDO quantization for I-slice. Default %d\n", param->psyScaleI);
         H0("   --dynamic-rd <0..4.0>         Strength of dynamic RD, 0 to disable. Default %.2f\n", param->dynamicRd);
         H0("   --[no-]ssim-rd                Enable ssim rate-distortion optimization, 0 to disable. Default %s\n", OPT(param->bSsimRd));
         H0("   --[no-]rd-refine              Enable QP-based RD refinement for rd levels 5 and 6. Default %s\n", OPT(param->bEnableRdRefine));
@@ -304,11 +307,13 @@ namespace X265_NS {
             "                                   - Bit 2: If set to 1, enable HDR mode => don't use biased mode on auto-AQ.\n"
             "                                   - Bit 3: If set to 1, replace AQ-MODE 1 by AQ-MODE 5. Overrided by bit 2.\n"
             "                                Disabled %d (default), <>0 enabled\n", param->rc.AQAuto);
+        H0("   --[no-]limit-aq1              Use QP offset determined by aq-mode 1 (uniform AQ) as hard upper limit on QP offset allowed in aq-mode 2-5. This (might) help in scenes with large complexity differences among blocks. Default is %s\n", OPT(param->rc.limitAq1));
         H0("   --[no-]hevc-aq                Mode for HEVC Adaptive Quantization. Default %s\n", OPT(param->rc.hevcAq));
         H0("   --aq-strength <float>         Reduces blocking and blurring in flat and textured areas (0 to 3.0). Default %.2f\n", param->rc.aqStrength);
         H0("   --aq-bias-strength <float>    Sets the bias to dark strength in AQ modes 3 and 5. Default %.2f\n", param->rc.aqBiasStrength);
         H0("   --aq-strength-edge <float>    AQ-Strengh specific for edge modes 4 & 5 (0 to 3.0). Default aq-strength\n");
         H0("   --aq-bias-strength-edge <float> Sets the bias for edge mode 5. Default aq-bias-strength\n");
+        H0("   --limit-aq1-strength <float>  Sets the aq-strength aq-mode 1 when limit-aq1 is enabled (0 to 3.0). Default %.2f\n", param->rc.limitAq1Strength);
         H0("   --aq-fast-edge                Disables Gaussian blur in AQ modes 4 & 5 edge detection. Default %s\n", OPT(param->rc.aqFastEdge));
         H0("   --qp-adaptation-range <float> Delta QP range by QP adaptation based on a psycho-visual model (1.0 to 6.0). Default %.2f\n", param->rc.qpAdaptationRange);
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
@@ -319,6 +324,17 @@ namespace X265_NS {
         H1("   --ipratio <float>             QP factor between I and P. Default %.2f\n", param->rc.ipFactor);
         H1("   --pbratio <float>             QP factor between P and B. Default %.2f\n", param->rc.pbFactor);
         H1("   --qcomp <float>               Weight given to predicted complexity. Default %.2f\n", param->rc.qCompress);
+        H1("   --cutree-strength <float>     Overrides the strength of cutree Adaptive Quantization. Default is unset (calculated from --qcomp):\n"
+           "                                 - hevc-aq enabled:   6.0 * (1.0 - qcomp)\n"
+           "                                 - hevc-aq disabled:  5.0 * (1.0 - qcomp)\n");
+        H1("   --cutree-minqpoffs <float>    sets a hard lower limit on QP offset (-69 to 0 ) allowed for cutree Adaptive Quantization. Default is %.2f (not limited)\n", param->rc.cuTreeMinQpOffset);
+        H1("   --cutree-maxqpoffs <float>    sets a hard upper limit on QP offset ( 0 to 69 ) allowed for cutree Adaptive Quantization. Default is %.2f (not limited)\n", param->rc.cuTreeMaxQpOffset);
+        H1("   --qscale-mode <integer>       Overrides how ratecontrol will estimate quant/qScale - Default %d\n"
+           "                                     - 0 : not overriding the default ratecontrol logic\n"
+           "                                     - 1 : Uses frame duration as basis of estimation (default for --cutree)\n"
+           "                                     - 2 : Uses frame complexity as basis of (default for --no-cutree and --hevc-aq)\n"
+           "                                     - 3 : Minimum(Mode1, Mode2)\n"
+           "                                     - 4 : Maximum(Mode1, Mode2)\n", param->rc.qScaleMode);
         H1("   --qpstep <integer>            The maximum single adjustment in QP allowed to rate control. Default %d\n", param->rc.qpStep);
         H1("   --qpmin <integer>             sets a hard lower limit on QP allowed to ratecontrol. Default %d\n", param->rc.qpMin);
         H1("   --qpmax <integer>             sets a hard upper limit on QP allowed to ratecontrol. Default %d\n", param->rc.qpMax);
