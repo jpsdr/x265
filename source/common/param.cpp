@@ -938,6 +938,8 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     bool bError = false;
     bool bNameWasBool = false;
     bool bValueWasNull = !value;
+    bool bExtraParams1 = false;
+    bool bExtraParams2 = false;
     bool bExtraParams = false;
     char nameBuf[64];
     static int count;
@@ -1276,99 +1278,100 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         p->rc.pbFactor = 1.0;
     }
     OPT("analysis-reuse-mode") p->analysisReuseMode = parseName(value, x265_analysis_names, bError); /*DEPRECATED*/
-    OPT("sar")
-    {
-        p->vui.aspectRatioIdc = parseName(value, x265_sar_names, bError);
-        if (bError)
-        {
-            p->vui.aspectRatioIdc = X265_EXTENDED_SAR;
-            bError = sscanf(value, "%d:%d", &p->vui.sarWidth, &p->vui.sarHeight) != 2;
-        }
-    }
-    OPT("overscan")
-    {
-        if (!strcmp(value, "show"))
-            p->vui.bEnableOverscanInfoPresentFlag = 1;
-        else if (!strcmp(value, "crop"))
-        {
-            p->vui.bEnableOverscanInfoPresentFlag = 1;
-            p->vui.bEnableOverscanAppropriateFlag = 1;
-        }
-        else if (!strcmp(value, "unknown"))
-            p->vui.bEnableOverscanInfoPresentFlag = 0;
-        else
-            bError = true;
-    }
-    OPT("videoformat")
-    {
-        p->vui.bEnableVideoSignalTypePresentFlag = 1;
-        p->vui.videoFormat = parseName(value, x265_video_format_names, bError);
-    }
-    OPT("range")
-    {
-        p->vui.bEnableVideoSignalTypePresentFlag = 1;
-        p->vui.bEnableVideoFullRangeFlag = parseName(value, x265_fullrange_names, bError);
-    }
-    OPT("colorprim")
-    {
-        p->vui.bEnableVideoSignalTypePresentFlag = 1;
-        p->vui.bEnableColorDescriptionPresentFlag = 1;
-        p->vui.colorPrimaries = parseName(value, x265_colorprim_names, bError);
-    }
-    OPT("transfer")
-    {
-        p->vui.bEnableVideoSignalTypePresentFlag = 1;
-        p->vui.bEnableColorDescriptionPresentFlag = 1;
-        p->vui.transferCharacteristics = parseName(value, x265_transfer_names, bError);
-    }
-    OPT("colormatrix")
-    {
-        p->vui.bEnableVideoSignalTypePresentFlag = 1;
-        p->vui.bEnableColorDescriptionPresentFlag = 1;
-        p->vui.matrixCoeffs = parseName(value, x265_colmatrix_names, bError);
-    }
-    OPT("chromaloc")
-    {
-        p->vui.bEnableChromaLocInfoPresentFlag = 1;
-        p->vui.chromaSampleLocTypeTopField = atoi(value);
-        p->vui.chromaSampleLocTypeBottomField = p->vui.chromaSampleLocTypeTopField;
-    }
-    OPT2("display-window", "crop-rect")
-    {
-        p->vui.bEnableDefaultDisplayWindowFlag = 1;
-        bError |= sscanf(value, "%d,%d,%d,%d",
-                         &p->vui.defDispWinLeftOffset,
-                         &p->vui.defDispWinTopOffset,
-                         &p->vui.defDispWinRightOffset,
-                         &p->vui.defDispWinBottomOffset) != 4;
-    }
-    OPT("nr-intra") p->noiseReductionIntra = atoi(value);
-    OPT("nr-inter") p->noiseReductionInter = atoi(value);
-    OPT("pass")
-    {
-        int pass = x265_clip3(0, 3, atoi(value));
-        p->rc.bStatWrite = pass & 1;
-        p->rc.bStatRead = pass & 2;
-        p->rc.dataShareMode = X265_SHARE_MODE_FILE;
-    }
-    OPT("stats") snprintf(p->rc.statFileName, X265_MAX_STRING_SIZE, "%s", value);
-    OPT("scaling-list") snprintf(p->scalingLists, X265_MAX_STRING_SIZE, "%s", value);
-    OPT2("pools", "numa-pools") snprintf(p->numaPools, X265_MAX_STRING_SIZE, "%s", value);
-    OPT("lambda-file") snprintf(p->rc.lambdaFileName, X265_MAX_STRING_SIZE, "%s", value);
-    OPT("analysis-reuse-file") snprintf(p->analysisReuseFileName, X265_MAX_STRING_SIZE, "%s", value);
-    OPT("qg-size") p->rc.qgSize = atoi(value);
-    OPT("master-display") snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "%s", value);
-    OPT("max-cll") bError |= sscanf(value, "%hu,%hu", &p->maxCLL, &p->maxFALL) != 2;
-    OPT("min-luma") p->minLuma = (uint16_t)atoi(value);
-    OPT("max-luma") p->maxLuma = (uint16_t)atoi(value);
-    OPT("uhd-bd") p->uhdBluray = atobool(value);
     else
-        bExtraParams = true;
+        bExtraParams1 = true;
 
     // solve "fatal error C1061: compiler limit : blocks nested too deeply"
-    if (bExtraParams)
+    if (bExtraParams1)
     {
         if (0) ;
+        OPT("sar")
+        {
+            p->vui.aspectRatioIdc = parseName(value, x265_sar_names, bError);
+            if (bError)
+            {
+                p->vui.aspectRatioIdc = X265_EXTENDED_SAR;
+                bError = sscanf(value, "%d:%d", &p->vui.sarWidth, &p->vui.sarHeight) != 2;
+            }
+        }
+        OPT("overscan")
+        {
+            if (!strcmp(value, "show"))
+                p->vui.bEnableOverscanInfoPresentFlag = 1;
+            else if (!strcmp(value, "crop"))
+            {
+                p->vui.bEnableOverscanInfoPresentFlag = 1;
+                p->vui.bEnableOverscanAppropriateFlag = 1;
+            }
+            else if (!strcmp(value, "unknown"))
+                p->vui.bEnableOverscanInfoPresentFlag = 0;
+            else
+                bError = true;
+        }
+        OPT("videoformat")
+        {
+            p->vui.bEnableVideoSignalTypePresentFlag = 1;
+            p->vui.videoFormat = parseName(value, x265_video_format_names, bError);
+        }
+        OPT("range")
+        {
+            p->vui.bEnableVideoSignalTypePresentFlag = 1;
+            p->vui.bEnableVideoFullRangeFlag = parseName(value, x265_fullrange_names, bError);
+        }
+        OPT("colorprim")
+        {
+            p->vui.bEnableVideoSignalTypePresentFlag = 1;
+            p->vui.bEnableColorDescriptionPresentFlag = 1;
+            p->vui.colorPrimaries = parseName(value, x265_colorprim_names, bError);
+        }
+        OPT("transfer")
+        {
+            p->vui.bEnableVideoSignalTypePresentFlag = 1;
+            p->vui.bEnableColorDescriptionPresentFlag = 1;
+            p->vui.transferCharacteristics = parseName(value, x265_transfer_names, bError);
+        }
+        OPT("colormatrix")
+        {
+            p->vui.bEnableVideoSignalTypePresentFlag = 1;
+            p->vui.bEnableColorDescriptionPresentFlag = 1;
+            p->vui.matrixCoeffs = parseName(value, x265_colmatrix_names, bError);
+        }
+        OPT("chromaloc")
+        {
+            p->vui.bEnableChromaLocInfoPresentFlag = 1;
+            p->vui.chromaSampleLocTypeTopField = atoi(value);
+            p->vui.chromaSampleLocTypeBottomField = p->vui.chromaSampleLocTypeTopField;
+        }
+        OPT2("display-window", "crop-rect")
+        {
+            p->vui.bEnableDefaultDisplayWindowFlag = 1;
+            bError |= sscanf(value, "%d,%d,%d,%d",
+                             &p->vui.defDispWinLeftOffset,
+                             &p->vui.defDispWinTopOffset,
+                             &p->vui.defDispWinRightOffset,
+                             &p->vui.defDispWinBottomOffset) != 4;
+        }
+        OPT("nr-intra") p->noiseReductionIntra = atoi(value);
+        OPT("nr-inter") p->noiseReductionInter = atoi(value);
+        OPT("pass")
+        {
+            int pass = x265_clip3(0, 3, atoi(value));
+            p->rc.bStatWrite = pass & 1;
+            p->rc.bStatRead = pass & 2;
+            p->rc.dataShareMode = X265_SHARE_MODE_FILE;
+        }
+        OPT("stats") snprintf(p->rc.statFileName, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("scaling-list") snprintf(p->scalingLists, X265_MAX_STRING_SIZE, "%s", value);
+        OPT2("pools", "numa-pools") snprintf(p->numaPools, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("lambda-file") snprintf(p->rc.lambdaFileName, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("analysis-reuse-file") snprintf(p->analysisReuseFileName, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("qg-size") p->rc.qgSize = atoi(value);
+        OPT("master-display") snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("max-cll") bError |= sscanf(value, "%hu,%hu", &p->maxCLL, &p->maxFALL) != 2;
+        OPT("min-luma") p->minLuma = (uint16_t)atoi(value);
+        OPT("max-luma") p->maxLuma = (uint16_t)atoi(value);
+        OPT("uhd-bd") p->uhdBluray = atobool(value);
+
         OPT("csv") snprintf(p->csvfn, X265_MAX_STRING_SIZE, "%s", value);
         OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value);
@@ -1476,6 +1479,14 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
                 bError = true;
             }
         }
+        else
+            bExtraParams2 = true;
+    }
+	
+    // solve "fatal error C1061: compiler limit : blocks nested too deeply"
+    if (bExtraParams2)
+    {
+        if (0) ;
         OPT("gop-lookahead") p->gopLookahead = atoi(value);
         OPT("analysis-save") snprintf(p->analysisSave, X265_MAX_STRING_SIZE, "%s", value);
         OPT("analysis-load") snprintf(p->analysisLoad, X265_MAX_STRING_SIZE, "%s", value);
@@ -1599,6 +1610,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         else
             return X265_PARAM_BAD_NAME;
     }
+
 #undef OPT
 #undef atobool
 #undef atoi
