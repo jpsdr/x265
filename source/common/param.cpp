@@ -2483,9 +2483,9 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), " aq-mode=%d", p->rc.aqMode);
 	BOOL(p->rc.limitAq1, "limit-aq1");
     s += snprintf(s, bufSize - (s - buf), " aq-strength=%.2f", p->rc.aqStrength);
-    s += sprintf(s, " aq-strength-edge=%.2f", p->rc.aqStrengthEdge);
-    s += sprintf(s, " aq-bias-strength=%.2f", p->rc.aqBiasStrength);
-    s += sprintf(s, " aq-bias-strength-edge=%.2f", p->rc.aqBiasStrengthEdge);
+    s += snprintf(s, bufSize - (s - buf), " aq-strength-edge=%.2f", p->rc.aqStrengthEdge);
+    s += snprintf(s, bufSize - (s - buf), " aq-bias-strength=%.2f", p->rc.aqBiasStrength);
+    s += snprintf(s, bufSize - (s - buf), " aq-bias-strength-edge=%.2f", p->rc.aqBiasStrengthEdge);
 	s += snprintf(s, bufSize - (s - buf), " limit-aq1-strength=%.2f", p->rc.limitAq1Strength);
     BOOL(p->rc.aqFastEdge, "aq-fast-edge");
     BOOL(p->rc.cuTree, "cutree");
@@ -2546,7 +2546,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), " scenecut-bias=%.2f", p->scenecutBias);
     BOOL(p->bOptCUDeltaQP, "opt-cu-delta-qp");
     BOOL(p->bAQMotion, "aq-motion");
-    s += sprintf(s, " aq-auto=%d", p->rc.AQAuto);
+    s += snprintf(s, bufSize - (s - buf), " aq-auto=%d", p->rc.AQAuto);
     BOOL(p->bEmitHDR10SEI, "hdr10");
     BOOL(p->bHDR10Opt, "hdr10-opt");
     BOOL(p->bDhdr10opt, "dhdr10-opt");
