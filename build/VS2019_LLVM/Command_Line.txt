@@ -1,4 +1,6 @@
--Ofast -msse2
--Ofast -mavx
--Ofast -mavx2 -mfma -march=broadwell -mtune=broadwell
--Ofast -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi -mavx512vpopcntdq -mavx512vnni -march=znver4 -mtune=znver4
+-Ofast -march=znver4
+-Ofast -msse2 -mavx -mavx2 -mfma -mtune=znver4
+-Ofast -march=broadwell
+-Ofast -msse2 -mavx -mavx2 -mavx512f -mavx512cd -mavx512vl -mavx512bw -mavx512dq
+-Ofast -msse2 -mavx -mavx2
+-Ofast -msse2 -mavx
