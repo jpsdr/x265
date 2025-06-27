@@ -336,6 +336,8 @@ RateControl::RateControl(x265_param& p, Encoder *top)
         m_lastQScaleFor[i] = x265_qp2qScale(m_param->rc.rateControlMode == X265_RC_CRF ? CRF_INIT_QP : ABR_INIT_QP_MIN);
         m_lmin[i] = x265_qp2qScale(m_param->rc.qpMin);
         m_lmax[i] = x265_qp2qScale(m_param->rc.qpMax);
+        m_frameCountSeg[i] = 0;
+        m_movingSumComplexitySeg[i] = 0;
     }
 
     if (m_param->rc.rateControlMode == X265_RC_CQP)
@@ -492,7 +494,11 @@ bool RateControl::init(const SPS& sps)
     m_accumPNorm = .01;
     m_accumPQp = (m_param->rc.rateControlMode == X265_RC_CRF ? CRF_INIT_QP : ABR_INIT_QP_MIN) * m_accumPNorm;
 
-
+    for (int i = 0; i < 3; i++)
+    {
+        m_frameCountSeg[i] = 0;
+        m_movingSumComplexitySeg[i] = 0;
+    }
     /* Frame Predictors used in vbv */
     initFramePredictors();
     if (!m_statFileOut && (m_param->rc.bStatWrite || m_param->rc.bStatRead))
@@ -1366,6 +1372,11 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
             //Reset SBRC buffer
             m_encodedSegmentBits = 0;
             m_segDur = 0;
+            for (int i = 0; i < 3; i++)
+            {
+                m_frameCountSeg[i] = 0;
+                m_movingSumComplexitySeg[i] = 0;
+            }
         }
     }
 
@@ -2248,15 +2259,23 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
                 if (m_param->bEnableSBRC)
                 {
                     double rfConstant = m_param->rc.rfConstant;
-                    if (m_currentSatd < rce->movingAvgSum)
+                    if (m_currentSatd < m_movingSumComplexitySeg[rce->sliceType])
                         rfConstant += 2;
                     double ipOffset = (curFrame->m_lowres.bScenecut ? m_ipOffset : m_ipOffset / 2.0);
                     rfConstant = (rce->sliceType == I_SLICE ? rfConstant - ipOffset :
                         (rce->sliceType == B_SLICE ? rfConstant + m_pbOffset : rfConstant));
                     double mbtree_offset = m_param->rc.cuTree ? (1.0 - m_param->rc.qCompress) * 13.5 : 0;
-                    double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 0.99 : m_param->rc.qCompress;
-                    m_rateFactorConstant = pow(m_currentSatd, 1.0 - qComp) /
+                    double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 1.0 : m_param->rc.qCompress;
+                    double baseCplx = m_ncu * (m_param->bframes ? 120 : 80);
+                    m_rateFactorConstant = pow(baseCplx, 1.0 - qComp) /
                         x265_qp2qScale(rfConstant + mbtree_offset);
+
+                    if (IS_REFERENCED(curFrame))
+                    {
+                        double movingAvg = m_frameCountSeg[rce->sliceType] ? ((m_movingSumComplexitySeg[rce->sliceType] * m_frameCountSeg[rce->sliceType]) + m_currentSatd) / (m_frameCountSeg[rce->sliceType] + 1) : m_currentSatd;
+                        m_movingSumComplexitySeg[rce->sliceType] = movingAvg;
+                        m_frameCountSeg[rce->sliceType]++;
+                    }
                 }
                 q = getQScale(rce, m_rateFactorConstant);
                 x265_zone* zone = getZone();

@@ -194,6 +194,8 @@ public:
     int64_t m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
     int64_t m_encodedBits;      /* bits used for encoded frames (without ammortization) */
     int64_t m_encodedSegmentBits;      /* bits used for encoded frames in a segment*/
+    double  m_movingSumComplexitySeg[3];
+    int     m_frameCountSeg[3];
     double  m_segDur;
     double  m_fps;
     int64_t m_satdCostWindow[50];
