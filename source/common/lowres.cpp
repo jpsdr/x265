@@ -423,12 +423,17 @@ void Lowres::init(PicYuv *origPic, int poc)
     int cuCount = maxBlocksInRow * maxBlocksInCol;
     int cuCountFullRes = (origPic->m_param->rc.qgSize > 8) ? cuCount : cuCount << 2;
     memset(intraCost, 0, sizeof(int32_t) * cuCount);
-    if (!!origPic->m_param->rc.aqMode || !!origPic->m_param->rc.hevcAq || !!origPic->m_param->bAQMotion || !!origPic->m_param->bEnableWeightedPred || !!origPic->m_param->bEnableWeightedBiPred)
-        {
+	memset(edgeInclined, 0, sizeof(int) * cuCountFullRes);
+    if (!origPic->m_param->rc.bStatRead &&
+        (origPic->m_param->rc.aqMode || origPic->m_param->rc.hevcAq ||
+            origPic->m_param->bAQMotion || origPic->m_param->bEnableWeightedPred ||
+            origPic->m_param->bEnableWeightedBiPred))
+    {
         memset(qpAqOffset, 0, sizeof(double) * cuCountFullRes);
         memset(qpCuTreeOffset, 0,sizeof(double) * cuCountFullRes);
-        memset(edgeInclined, 0, sizeof(int) * cuCountFullRes);
-        }
-     if (origPic->m_param->bAQMotion)
+	}
+    if (origPic->m_param->bAQMotion && !origPic->m_param->rc.bStatRead)
+    {
         memset(qpAqMotionOffset, 0, sizeof(double) * cuCountFullRes);
+    }
 }
