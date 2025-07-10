@@ -263,6 +263,7 @@ RateControl::RateControl(x265_param& p, Encoder *top)
     m_rateTolerance = 1.0;
     m_encodedSegmentBits = 0;
     m_segDur = 0;
+    m_totalframesInSegment = 0;
 
     if (m_param->rc.vbvBufferSize)
     {
@@ -321,6 +322,7 @@ RateControl::RateControl(x265_param& p, Encoder *top)
     m_leadingNoBSatd = 0;
     m_ipOffset = 6.0 * X265_LOG2(m_param->rc.ipFactor);
     m_pbOffset = 6.0 * X265_LOG2(m_param->rc.pbFactor);
+    m_iBits = 0;
 
     for (int i = 0; i < QP_MAX_MAX; i++)
         m_qpToEncodedBits[i] = 0;
@@ -1372,6 +1374,9 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
             //Reset SBRC buffer
             m_encodedSegmentBits = 0;
             m_segDur = 0;
+            m_iBits = 0;
+            m_totalframesInSegment = m_param->totalFrames - m_framesDone;
+
             for (int i = 0; i < 3; i++)
             {
                 m_frameCountSeg[i] = 0;
@@ -2033,7 +2038,7 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
 
         if (m_param->bEnableSBRC)
         {
-            qScale = tuneQscaleForSBRC(curFrame, qScale);
+            qScale = tuneQscaleForSBRC(curFrame, qScale, rce);
             rce->qpNoVbv = x265_qScale2qp(qScale);
         }
 
@@ -2359,7 +2364,7 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
                 m_lastQScaleFor[P_SLICE] = X265_MAX(minScenecutQscale, m_lastQScaleFor[P_SLICE]);
             }
             if (m_param->bEnableSBRC)
-                q = tuneQscaleForSBRC(curFrame, q);
+                q = tuneQscaleForSBRC(curFrame, q, rce);
 
             rce->qpNoVbv = x265_qScale2qp(q);
             if (m_sliceType == P_SLICE)
@@ -2541,7 +2546,7 @@ double RateControl::predictSize(Predictor *p, double q, double var)
     return (p->coeff * var + p->offset) / (q * p->count);
 }
 
-double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
+double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q, RateControlEntry* rce)
 {
     int depth = 0;
     int framesDoneInSeg = m_framesDone % m_param->keyframeMax;
@@ -2553,6 +2558,8 @@ double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
     {
         double totalDuration = m_segDur;
         double frameBitsTotal = m_encodedSegmentBits + predictSize(&m_pred[m_predType], q, (double)m_currentSatd);
+        double lookaheadBits = 0;
+        double lookaheadDur = 0;
         for (int i = 0; i < depth; i++)
         {
             int type = curFrame->m_lowres.plannedType[i];
@@ -2563,17 +2570,42 @@ double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
             int predType = getPredictorType(curFrame->m_lowres.plannedType[i], type);
             double curBits = predictSize(&m_pred[predType], q, (double)satd);
             frameBitsTotal += curBits;
+            lookaheadBits += curBits;
+            lookaheadDur += m_frameDuration;
             totalDuration += m_frameDuration;
         }
         //Check for segment buffer overflow and adjust QP accordingly
         double segDur = m_param->keyframeMax / m_fps;
         double allowedSize = m_vbvMaxRate * segDur;
         double remDur = segDur - totalDuration;
-        double remainingBits = frameBitsTotal / totalDuration * remDur;
-        if (frameBitsTotal + remainingBits > 0.9 * allowedSize)
-            q = q * 1.01;
+        double remainingBits = frameBitsTotal;
+
+        int framesLeft = m_param->totalFrames - m_framesDone;
+        int isLastSegmentInaEncode = m_totalframesInSegment < m_param->keyframeMax;
+        remainingBits = lookaheadBits / lookaheadDur * remDur;
+
+		//Reduce over estimation due to I frame size
+        if (m_iBits == 0)
+        {
+            //Compute number of I frames
+            double estimatedIBits = predictSize(&m_pred[m_predType], q, (double)m_currentSatd) * remDur;
+            remainingBits -= estimatedIBits;
+        }
+
+		if (!isLastSegmentInaEncode && m_segDur <  (0.2 * segDur))
+        {
+            if (frameBitsTotal + remainingBits > (allowedSize * 2))
+                q = q * 1.01;
+            else
+                break;
+        }
         else
-            break;
+        {
+            if (frameBitsTotal + remainingBits > (allowedSize))
+                q = q * 1.01;
+            else
+                break;
+        }
     }
     return q;
 }
@@ -3248,6 +3280,10 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
             rce->hrdTiming->cpbFinalAT = m_prevCpbFinalAT = rce->hrdTiming->cpbInitialAT + (actualBits + filler_bits)/ cpbsizeUnscale;
             rce->hrdTiming->dpbOutputTime = (double)rce->picTimingSEI->m_picDpbOutputDelay * time->numUnitsInTick / time->timeScale + rce->hrdTiming->cpbRemovalTime;
         }
+    }
+    if (rce->sliceType == I_SLICE)
+    {
+        m_iBits = actualBits;
     }
     rce->isActive = false;
     // Allow rateControlStart of next frame only when rateControlEnd of previous frame is over
