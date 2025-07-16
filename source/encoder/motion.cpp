@@ -1604,17 +1604,6 @@ me_hex2:
         bmv = MV(0, 0);
     }
 
-    // to ensure the mvdLX is in the range of [-2^15, 2^15-1]
-    MV clipmin((int32_t) -(1<<15),     (int32_t) -(1<<15));
-    MV clipmax((int32_t)  (1<<15) - 1, (int32_t)  (1<<15) - 1);
-    clipmin += qmvp;
-    clipmax += qmvp;
-    if (!bmv.checkRange(clipmin, clipmax))
-    {
-        bmv = bmv.clipped(clipmin, clipmax);
-        bcost = subpelCompare(ref, bmv, satd) + mvcost(bmv);
-    }
-
     x265_emms();
     outQMv = bmv;
     return bcost;
