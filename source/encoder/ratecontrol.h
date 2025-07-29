@@ -178,7 +178,7 @@ public:
     int     m_qpConstant[3];
     int     m_lastNonBPictType;
     int     m_framesDone;        /* # of frames passed through RateCotrol already */
-    int     m_iBits;
+    int64_t m_iBits;
     double  m_cplxrSum;          /* sum of bits*qscale/rceq */
     double  m_wantedBitsWindow;  /* target bitrate * window */
     double  m_accumPQp;          /* for determining I-frame quant */
@@ -305,7 +305,7 @@ protected:
     double rateEstimateQscale(Frame* pic, RateControlEntry *rce); // main logic for calculating QP based on ABR
     double tuneAbrQScaleFromFeedback(double qScale);
     double tuneQScaleForZone(RateControlEntry *rce, double qScale); // Tune qScale to adhere to zone budget
-    double tuneQscaleForSBRC(Frame* curFrame, double q, RateControlEntry *rce); // Tune qScale to adhere to segment budget
+    double tuneQscaleForSBRC(Frame* curFrame, double q); // Tune qScale to adhere to segment budget	
     void   accumPQpUpdate();
 
     int    getPredictorType(int lowresSliceType, int sliceType);

@@ -2038,7 +2038,7 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
 
         if (m_param->bEnableSBRC)
         {
-            qScale = tuneQscaleForSBRC(curFrame, qScale, rce);
+            qScale = tuneQscaleForSBRC(curFrame, qScale);
             rce->qpNoVbv = x265_qScale2qp(qScale);
         }
 
@@ -2264,8 +2264,10 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
                 if (m_param->bEnableSBRC)
                 {
                     double rfConstant = m_param->rc.rfConstant;
-                    if (m_currentSatd < m_movingSumComplexitySeg[rce->sliceType])
+                    if (m_currentSatd < (0.7 *m_movingSumComplexitySeg[rce->sliceType]))
                         rfConstant += 2;
+                    else if (m_currentSatd > (1.3 *m_movingSumComplexitySeg[rce->sliceType]))
+                        rfConstant -= 1;
                     double ipOffset = (curFrame->m_lowres.bScenecut ? m_ipOffset : m_ipOffset / 2.0);
                     rfConstant = (rce->sliceType == I_SLICE ? rfConstant - ipOffset :
                         (rce->sliceType == B_SLICE ? rfConstant + m_pbOffset : rfConstant));
@@ -2364,7 +2366,7 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
                 m_lastQScaleFor[P_SLICE] = X265_MAX(minScenecutQscale, m_lastQScaleFor[P_SLICE]);
             }
             if (m_param->bEnableSBRC)
-                q = tuneQscaleForSBRC(curFrame, q, rce);
+                q = tuneQscaleForSBRC(curFrame, q);
 
             rce->qpNoVbv = x265_qScale2qp(q);
             if (m_sliceType == P_SLICE)
@@ -2546,7 +2548,7 @@ double RateControl::predictSize(Predictor *p, double q, double var)
     return (p->coeff * var + p->offset) / (q * p->count);
 }
 
-double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q, RateControlEntry* rce)
+double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
 {
     int depth = 0;
     int framesDoneInSeg = m_framesDone % m_param->keyframeMax;
@@ -2579,8 +2581,6 @@ double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q, RateControlEntr
         double allowedSize = m_vbvMaxRate * segDur;
         double remDur = segDur - totalDuration;
         double remainingBits = frameBitsTotal;
-
-        int framesLeft = m_param->totalFrames - m_framesDone;
         int isLastSegmentInaEncode = m_totalframesInSegment < m_param->keyframeMax;
         remainingBits = lookaheadBits / lookaheadDur * remDur;
 
