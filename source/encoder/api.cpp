@@ -1406,6 +1406,8 @@ FILE* x265_csvlog_open(const x265_param* param)
                     /* detailed performance statistics */
                     fprintf(csvfp, ", DecideWait (ms), Row0Wait (ms), Wall time (ms), Ref Wait Wall (ms), Total CTU time (ms),"
                         "Stall Time (ms), Total frame time (ms), Avg WPP, Row Blocks");
+
+                    fprintf(csvfp, ", Total ThreadedME Wait Time (ms), Total ThreadedME Time (ms)");
 #if ENABLE_LIBVMAF
                     fprintf(csvfp, ", VMAF Frame Score");
 #endif
@@ -1542,6 +1544,9 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
                                                                                      frameStats->totalFrameTime);
 
         fprintf(param->csvfpt, " %.3lf, %d", frameStats->avgWPP, frameStats->countRowBlocks);
+
+        fprintf(param->csvfpt, ", %.1lf, %.1lf", frameStats->tmeWaitTime / 1000.0, frameStats->tmeTime / 1000.0);
+
 #if ENABLE_LIBVMAF
         fprintf(param->csvfpt, ", %lf", frameStats->vmafFrameScore);
 #endif

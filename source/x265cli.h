@@ -398,6 +398,8 @@ static const struct option long_options[] =
     { "aom-film-grain", required_argument, NULL, 0 },
     { "frame-rc",no_argument, NULL, 0 },
     { "no-frame-rc",no_argument, NULL, 0 },
+    { "threaded-me", no_argument, NULL, 0 },
+    { "no-threaded-me", no_argument, NULL, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },

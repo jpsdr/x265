@@ -423,6 +423,10 @@ void x265_param_default(x265_param* param)
     param->searchRangeForLayer1 = 3;
     param->searchRangeForLayer2 = 3;
 
+    /* Threaded ME */
+    param->tmeTaskBlockSize = 1;
+    param->tmeNumBufferRows = 10;
+
     /*Alpha Channel Encoding*/
     param->bEnableAlpha = 0;
     param->numScalableLayers = 1;
@@ -487,6 +491,8 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->rc.hevcAq = 0;
             param->rc.qgSize = 32;
             param->bEnableFastIntra = 1;
+            param->tmeTaskBlockSize = 0; // Auto-detect
+            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "superfast"))
         {
@@ -508,6 +514,8 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->rc.qgSize = 32;
             param->bEnableSAO = 0;
             param->bEnableFastIntra = 1;
+            param->tmeTaskBlockSize = 0; // Auto-detect
+            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "veryfast"))
         {
@@ -522,6 +530,8 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->maxNumReferences = 2;
             param->rc.qgSize = 32;
             param->bEnableFastIntra = 1;
+            param->tmeTaskBlockSize = 0; // Auto-detect
+            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "faster"))
         {
@@ -1523,6 +1533,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         }
 #endif
         OPT("frame-rc") p->bConfigRCFrame = atobool(value);
+        OPT("threaded-me") p->bThreadedME = atobool(value);
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -1862,6 +1873,11 @@ int x265_check_params(x265_param* param)
         "Valid final VBV buffer emptiness must be a fraction 0 - 1, or size in kbits");
     CHECK(param->vbvEndFrameAdjust < 0,
         "Valid vbv-end-fr-adj must be a fraction 0 - 1");
+    if ((param->rc.vbvBufferSize > 0 || param->rc.vbvMaxBitrate > 0) && param->bThreadedME)
+    {
+        param->bThreadedME = 0;
+        x265_log(param, X265_LOG_WARNING, "VBV and threaded-me both enabled. Disabling threaded-me\n");
+    }
     CHECK(param->minVbvFullness < 0 && param->minVbvFullness > 100,
         "min-vbv-fullness must be a fraction 0 - 100");
     CHECK(param->maxVbvFullness < 0 && param->maxVbvFullness > 100,
@@ -2994,6 +3010,9 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bEnableHRDConcatFlag = src->bEnableHRDConcatFlag;
     dst->dolbyProfile = src->dolbyProfile;
     dst->bEnableSvtHevc = src->bEnableSvtHevc;
+    dst->bThreadedME = src->bThreadedME;
+    dst->tmeTaskBlockSize = src->tmeTaskBlockSize;
+    dst->tmeNumBufferRows = src->tmeNumBufferRows;
     dst->bEnableFades = src->bEnableFades;
     dst->bEnableSceneCutAwareQp = src->bEnableSceneCutAwareQp;
     dst->fwdMaxScenecutWindow = src->fwdMaxScenecutWindow;

@@ -82,6 +82,15 @@ int no_atomic_add(int* ptr, int val)
     pthread_mutex_unlock(&g_mutex);
     return ret;
 }
+
+int64_t no_atomic_add64(int64_t* ptr, int64_t val)
+{
+    pthread_mutex_lock(&g_mutex);
+    *ptr += val;
+    int64_t ret = *ptr;
+    pthread_mutex_unlock(&g_mutex);
+    return ret;
+}
 #endif
 
 /* C shim for forced stack alignment */

@@ -276,6 +276,8 @@ typedef struct x265_frame_stats
     double           decideWaitTime;
     double           row0WaitTime;
     double           wallTime;
+    int64_t          tmeTime;
+    int64_t          tmeWaitTime;
     double           refWaitWallTime;
     double           totalCTUTime;
     double           stallTime;
@@ -1171,6 +1173,15 @@ typedef struct x265_param
      * motion searches there will be to distribute. This option is often not a
      * win, particularly in video sequences with low motion. Default disabled */
     int       bDistributeMotionEstimation;
+
+    /* Use a dedicated threadpool to pre-process motion estimation. Evaluates all
+     * PU combinations for CTUs in parallel. Dependencies between CTUs in inter
+     * frames is broken to allow for more parallelism, and as result may cause
+     * drop in compression efficiency. Recommended for many core CPUs and when
+     * loss in compression efficiency is acceptable for speedup of encoding.
+     * Default disabled.
+     */
+    int       bThreadedME;
 
     /*== Logging Features ==*/
 
@@ -2328,6 +2339,10 @@ typedef struct x265_param
     int      searchRangeForLayer0;
     int      searchRangeForLayer1;
     int      searchRangeForLayer2;
+
+    /* Threaded ME */
+    int      tmeTaskBlockSize;
+    int      tmeNumBufferRows;
 
     /*SBRC*/
     int      bEnableSBRC;
