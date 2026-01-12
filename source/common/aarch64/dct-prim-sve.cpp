@@ -41,6 +41,18 @@ const int16_t t8_odd[4][8] =
     { 18, -50,  75, -89, 18, -50,  75, -89 },
 };
 
+const int16_t t16_eo_s16[16] =
+{
+    89,  75,  50,  18,  75, -18, -89, -50,
+    50, -89,  18,  75,  18, -50,  75, -89
+};
+
+const int32_t t16_eo_s32[16] =
+{
+    89,  75,  50,  18,  75, -18, -89, -50,
+    50, -89,  18,  75,  18, -50,  75, -89
+};
+
 template<int shift>
 static inline void partialButterfly8_sve(const int16_t *src, int16_t *dst)
 {
@@ -140,99 +152,117 @@ static inline void pass1Butterfly16_sve(const int16_t *src, int16_t *dst, intptr
     const int shift = 3 + X265_DEPTH - 8;
     const int line = 16;
 
-    int16x8_t O[line];
-    int16x8_t EO[line / 2];
-    int32x4_t EEE[line];
-    int32x4_t EEO[line];
-
-    for (int i = 0; i < line; i += 2)
-    {
-        int16x8_t s0_lo = vld1q_s16(src + i * srcStride);
-        int16x8_t s0_hi = rev16(vld1q_s16(src + i * srcStride + 8));
-
-        int16x8_t s1_lo = vld1q_s16(src + (i + 1) * srcStride);
-        int16x8_t s1_hi = rev16(vld1q_s16(src + (i + 1) * srcStride + 8));
-
-        int32x4_t E0[2];
-        E0[0] = vaddl_s16(vget_low_s16(s0_lo), vget_low_s16(s0_hi));
-        E0[1] = vaddl_s16(vget_high_s16(s0_lo), vget_high_s16(s0_hi));
-
-        int32x4_t E1[2];
-        E1[0] = vaddl_s16(vget_low_s16(s1_lo), vget_low_s16(s1_hi));
-        E1[1] = vaddl_s16(vget_high_s16(s1_lo), vget_high_s16(s1_hi));
-
-        O[i + 0] = vsubq_s16(s0_lo, s0_hi);
-        O[i + 1] = vsubq_s16(s1_lo, s1_hi);
-
-        int16x4_t EO_lo = vmovn_s32(vsubq_s32(E0[0], rev32(E0[1])));
-        int16x4_t EO_hi = vmovn_s32(vsubq_s32(E1[0], rev32(E1[1])));
-        EO[i / 2] = vcombine_s16(EO_lo, EO_hi);
-
-        int32x4_t EE0 = vaddq_s32(E0[0], rev32(E0[1]));
-        int32x4_t EE1 = vaddq_s32(E1[0], rev32(E1[1]));
-
-        int32x4_t t0 = vreinterpretq_s32_s64(
-            vzip1q_s64(vreinterpretq_s64_s32(EE0), vreinterpretq_s64_s32(EE1)));
-        int32x4_t t1 = vrev64q_s32(vreinterpretq_s32_s64(
-            vzip2q_s64(vreinterpretq_s64_s32(EE0),
-                       vreinterpretq_s64_s32(EE1))));
-
-        EEE[i / 2] = vaddq_s32(t0, t1);
-        EEO[i / 2] = vsubq_s32(t0, t1);
-    }
+    const int32x4_t c2 = vld1q_s32(t8_even[1]);
+    const int32x4_t c6 = vld1q_s32(t8_even[3]);
 
     for (int i = 0; i < line; i += 4)
     {
+        int16x8x2_t in0 = vld1q_s16_x2(src + (i + 0) * srcStride);
+        int16x8x2_t in1 = vld1q_s16_x2(src + (i + 1) * srcStride);
+        int16x8x2_t in2 = vld1q_s16_x2(src + (i + 2) * srcStride);
+        int16x8x2_t in3 = vld1q_s16_x2(src + (i + 3) * srcStride);
+
+        int16x8_t s0_lo = in0.val[0];
+        int16x8_t s0_hi = rev16(in0.val[1]);
+        int16x8_t s1_lo = in1.val[0];
+        int16x8_t s1_hi = rev16(in1.val[1]);
+        int16x8_t s2_lo = in2.val[0];
+        int16x8_t s2_hi = rev16(in2.val[1]);
+        int16x8_t s3_lo = in3.val[0];
+        int16x8_t s3_hi = rev16(in3.val[1]);
+
+        int32x4_t e00 = vaddl_s16(vget_low_s16(s0_lo), vget_low_s16(s0_hi));
+        int32x4_t e01 = vaddl_s16(vget_high_s16(s0_lo), vget_high_s16(s0_hi));
+        int32x4_t e10 = vaddl_s16(vget_low_s16(s1_lo), vget_low_s16(s1_hi));
+        int32x4_t e11 = vaddl_s16(vget_high_s16(s1_lo), vget_high_s16(s1_hi));
+        int32x4_t e20 = vaddl_s16(vget_low_s16(s2_lo), vget_low_s16(s2_hi));
+        int32x4_t e21 = vaddl_s16(vget_high_s16(s2_lo), vget_high_s16(s2_hi));
+        int32x4_t e30 = vaddl_s16(vget_low_s16(s3_lo), vget_low_s16(s3_hi));
+        int32x4_t e31 = vaddl_s16(vget_high_s16(s3_lo), vget_high_s16(s3_hi));
+
+        int16x8_t o0 = vsubq_s16(s0_lo, s0_hi);
+        int16x8_t o1 = vsubq_s16(s1_lo, s1_hi);
+        int16x8_t o2 = vsubq_s16(s2_lo, s2_hi);
+        int16x8_t o3 = vsubq_s16(s3_lo, s3_hi);
+
+        int32x4_t r01 = rev32(e01);
+        int32x4_t r11 = rev32(e11);
+        int32x4_t r21 = rev32(e21);
+        int32x4_t r31 = rev32(e31);
+
+        int32x4_t ee0 = vaddq_s32(e00, r01);
+        int32x4_t ee1 = vaddq_s32(e10, r11);
+        int32x4_t ee2 = vaddq_s32(e20, r21);
+        int32x4_t ee3 = vaddq_s32(e30, r31);
+
+        int16x8_t eo01 =
+            vcombine_s16(vmovn_s32(vsubq_s32(e00, r01)), vmovn_s32(vsubq_s32(e10, r11)));
+        int16x8_t eo23 =
+            vcombine_s16(vmovn_s32(vsubq_s32(e20, r21)), vmovn_s32(vsubq_s32(e30, r31)));
+
+        int32x4_t t0 = vcombine_s32(vget_low_s32(ee0), vget_low_s32(ee1));
+        int32x4_t t1 = vrev64q_s32(vcombine_s32(vget_high_s32(ee0), vget_high_s32(ee1)));
+        int32x4_t t2 = vcombine_s32(vget_low_s32(ee2), vget_low_s32(ee3));
+        int32x4_t t3 = vrev64q_s32(vcombine_s32(vget_high_s32(ee2), vget_high_s32(ee3)));
+        int32x4_t eee0 = vaddq_s32(t0, t1);
+        int32x4_t eee1 = vaddq_s32(t2, t3);
+        int32x4_t eeo0 = vsubq_s32(t0, t1);
+        int32x4_t eeo1 = vsubq_s32(t2, t3);
+
+        // Odd parts (k = 1,3,5,7,9,11,13,15)
         for (int k = 1; k < 16; k += 2)
         {
-            int16x8_t c0_c4 = vld1q_s16(&g_t16[k][0]);
+            const int16x8_t c = vld1q_s16(&g_t16[k][0]);
 
-            int64x2_t t0 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 0]);
-            int64x2_t t1 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 1]);
-            int64x2_t t2 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 2]);
-            int64x2_t t3 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 3]);
+            int64x2_t tt0 = x265_sdotq_s16(vdupq_n_s64(0), c, o0);
+            int64x2_t tt1 = x265_sdotq_s16(vdupq_n_s64(0), c, o1);
+            int64x2_t tt2 = x265_sdotq_s16(vdupq_n_s64(0), c, o2);
+            int64x2_t tt3 = x265_sdotq_s16(vdupq_n_s64(0), c, o3);
+            int32x4_t t01 = vcombine_s32(vmovn_s64(tt0), vmovn_s64(tt1));
+            int32x4_t t23 = vcombine_s32(vmovn_s64(tt2), vmovn_s64(tt3));
 
-            int32x4_t t01 = vcombine_s32(vmovn_s64(t0), vmovn_s64(t1));
-            int32x4_t t23 = vcombine_s32(vmovn_s64(t2), vmovn_s64(t3));
             int16x4_t res = vrshrn_n_s32(vpaddq_s32(t01, t23), shift);
             vst1_s16(dst + k * line, res);
         }
 
-        for (int k = 2; k < 16; k += 4)
+        // EO parts (k = 2,6,10,14)
+        for (int k = 2; k < 16; k += 8)
         {
-            int16x8_t c0 = vld1q_s16(t8_odd[(k - 2) / 4]);
+            const int16x8_t c01 = vld1q_s16(&t16_eo_s16[k - 2]);
 
-            int64x2_t t0 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i / 2 + 0]);
-            int64x2_t t1 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i / 2 + 1]);
+            int64x2_t tt0 = x265_sdotq_lane_s16(vdupq_n_s64(0), eo01, c01, 0);
+            int64x2_t tt1 = x265_sdotq_lane_s16(vdupq_n_s64(0), eo23, c01, 0);
+            int32x4_t t01 = vcombine_s32(vmovn_s64(tt0), vmovn_s64(tt1));
+            int16x4_t res2 = vrshrn_n_s32(t01, shift);
 
-            int32x4_t t01 = vcombine_s32(vmovn_s64(t0), vmovn_s64(t1));
-            int16x4_t res = vrshrn_n_s32(t01, shift);
-            vst1_s16(dst + k * line, res);
+            tt0 = x265_sdotq_lane_s16(vdupq_n_s64(0), eo01, c01, 1);
+            tt1 = x265_sdotq_lane_s16(vdupq_n_s64(0), eo23, c01, 1);
+            t01 = vcombine_s32(vmovn_s64(tt0), vmovn_s64(tt1));
+            int16x4_t res6 = vrshrn_n_s32(t01, shift);
+
+            vst1_s16(dst + (k + 0) * line, res2);
+            vst1_s16(dst + (k + 4) * line, res6);
         }
 
-        int32x4_t c0 = vld1q_s32(t8_even[0]);
-        int32x4_t c4 = vld1q_s32(t8_even[1]);
-        int32x4_t c8 = vld1q_s32(t8_even[2]);
-        int32x4_t c12 = vld1q_s32(t8_even[3]);
-
-        int32x4_t t0 = vpaddq_s32(EEE[i / 2 + 0], EEE[i / 2 + 1]);
-        int32x4_t t1 = vmulq_s32(c0, t0);
-        int16x4_t res0 = vrshrn_n_s32(t1, shift);
+        // EE parts (k = 0,4,8,12)
+        int32x4_t sum = vpaddq_s32(eee0, eee1);
+        int16x4_t res0 = vmovn_s32(vrshlq_s32(sum, vdupq_n_s32(11 - X265_DEPTH)));
         vst1_s16(dst + 0 * line, res0);
 
-        int32x4_t t2 = vmulq_s32(c4, EEO[i / 2 + 0]);
-        int32x4_t t3 = vmulq_s32(c4, EEO[i / 2 + 1]);
-        int16x4_t res4 = vrshrn_n_s32(vpaddq_s32(t2, t3), shift);
+        int32x4_t res4_lo = vmulq_s32(c2, eeo0);
+        int32x4_t res4_hi = vmulq_s32(c2, eeo1);
+        int16x4_t res4 = vrshrn_n_s32(vpaddq_s32(res4_lo, res4_hi), shift);
         vst1_s16(dst + 4 * line, res4);
 
-        int32x4_t t4 = vmulq_s32(c8, EEE[i / 2 + 0]);
-        int32x4_t t5 = vmulq_s32(c8, EEE[i / 2 + 1]);
-        int16x4_t res8 = vrshrn_n_s32(vpaddq_s32(t4, t5), shift);
+        int32x4_t diff_lo = vsubq_s32(eee0, vrev64q_s32(eee0));
+        int32x4_t diff_hi = vsubq_s32(eee1, vrev64q_s32(eee1));
+        int32x4_t diff = vuzp1q_s32(diff_lo, diff_hi);
+        int16x4_t res8 = vmovn_s32(vrshlq_s32(diff, vdupq_n_s32(11 - X265_DEPTH)));
         vst1_s16(dst + 8 * line, res8);
 
-        int32x4_t t6 = vmulq_s32(c12, EEO[i / 2 + 0]);
-        int32x4_t t7 = vmulq_s32(c12, EEO[i / 2 + 1]);
-        int16x4_t res12 = vrshrn_n_s32(vpaddq_s32(t6, t7), shift);
+        int32x4_t res12_lo = vmulq_s32(c6, eeo0);
+        int32x4_t res12_hi = vmulq_s32(c6, eeo1);
+        int16x4_t res12 = vrshrn_n_s32(vpaddq_s32(res12_lo, res12_hi), shift);
         vst1_s16(dst + 12 * line, res12);
 
         dst += 4;
@@ -244,100 +274,113 @@ static inline void pass2Butterfly16_sve(const int16_t *src, int16_t *dst)
     const int shift = 10;
     const int line = 16;
 
-    int16x8_t O[line];
-    int32x4_t EO[line];
-    int32x4_t EEE[line];
-    int32x4_t EEO[line];
-
-    for (int i = 0; i < line; i += 2)
-    {
-        int16x8_t s0_lo = vld1q_s16(src + i * line);
-        int16x8_t s0_hi = rev16(vld1q_s16(src + i * line + 8));
-
-        int16x8_t s1_lo = vld1q_s16(src + (i + 1) * line);
-        int16x8_t s1_hi = rev16(vld1q_s16(src + (i + 1) * line + 8));
-
-        int32x4_t E0[2];
-        E0[0] = vaddl_s16(vget_low_s16(s0_lo), vget_low_s16(s0_hi));
-        E0[1] = vaddl_s16(vget_high_s16(s0_lo), vget_high_s16(s0_hi));
-
-        int32x4_t E1[2];
-        E1[0] = vaddl_s16(vget_low_s16(s1_lo), vget_low_s16(s1_hi));
-        E1[1] = vaddl_s16(vget_high_s16(s1_lo), vget_high_s16(s1_hi));
-
-        O[i + 0] = vsubq_s16(s0_lo, s0_hi);
-        O[i + 1] = vsubq_s16(s1_lo, s1_hi);
-
-        EO[i + 0] = vsubq_s32(E0[0], rev32(E0[1]));
-        EO[i + 1] = vsubq_s32(E1[0], rev32(E1[1]));
-
-        int32x4_t EE0 = vaddq_s32(E0[0], rev32(E0[1]));
-        int32x4_t EE1 = vaddq_s32(E1[0], rev32(E1[1]));
-
-        int32x4_t t0 = vreinterpretq_s32_s64(
-            vzip1q_s64(vreinterpretq_s64_s32(EE0), vreinterpretq_s64_s32(EE1)));
-        int32x4_t t1 = vrev64q_s32(vreinterpretq_s32_s64(
-            vzip2q_s64(vreinterpretq_s64_s32(EE0),
-                       vreinterpretq_s64_s32(EE1))));
-
-        EEE[i / 2] = vaddq_s32(t0, t1);
-        EEO[i / 2] = vsubq_s32(t0, t1);
-    }
+    const int32x4_t c2 = vld1q_s32(t8_even[1]);
+    const int32x4_t c6 = vld1q_s32(t8_even[3]);
 
     for (int i = 0; i < line; i += 4)
     {
+        int16x8x2_t in0 = vld1q_s16_x2(src + (i + 0) * line);
+        int16x8x2_t in1 = vld1q_s16_x2(src + (i + 1) * line);
+        int16x8x2_t in2 = vld1q_s16_x2(src + (i + 2) * line);
+        int16x8x2_t in3 = vld1q_s16_x2(src + (i + 3) * line);
+
+        int16x8_t s0_lo = in0.val[0];
+        int16x8_t s0_hi = rev16(in0.val[1]);
+        int16x8_t s1_lo = in1.val[0];
+        int16x8_t s1_hi = rev16(in1.val[1]);
+        int16x8_t s2_lo = in2.val[0];
+        int16x8_t s2_hi = rev16(in2.val[1]);
+        int16x8_t s3_lo = in3.val[0];
+        int16x8_t s3_hi = rev16(in3.val[1]);
+
+        int32x4_t e00 = vaddl_s16(vget_low_s16(s0_lo), vget_low_s16(s0_hi));
+        int32x4_t e01 = vaddl_s16(vget_high_s16(s0_lo), vget_high_s16(s0_hi));
+        int32x4_t e10 = vaddl_s16(vget_low_s16(s1_lo), vget_low_s16(s1_hi));
+        int32x4_t e11 = vaddl_s16(vget_high_s16(s1_lo), vget_high_s16(s1_hi));
+        int32x4_t e20 = vaddl_s16(vget_low_s16(s2_lo), vget_low_s16(s2_hi));
+        int32x4_t e21 = vaddl_s16(vget_high_s16(s2_lo), vget_high_s16(s2_hi));
+        int32x4_t e30 = vaddl_s16(vget_low_s16(s3_lo), vget_low_s16(s3_hi));
+        int32x4_t e31 = vaddl_s16(vget_high_s16(s3_lo), vget_high_s16(s3_hi));
+
+        int16x8_t o0 = vsubq_s16(s0_lo, s0_hi);
+        int16x8_t o1 = vsubq_s16(s1_lo, s1_hi);
+        int16x8_t o2 = vsubq_s16(s2_lo, s2_hi);
+        int16x8_t o3 = vsubq_s16(s3_lo, s3_hi);
+
+        int32x4_t r01 = rev32(e01);
+        int32x4_t r11 = rev32(e11);
+        int32x4_t r21 = rev32(e21);
+        int32x4_t r31 = rev32(e31);
+
+        int32x4_t ee0 = vaddq_s32(e00, r01);
+        int32x4_t ee1 = vaddq_s32(e10, r11);
+        int32x4_t ee2 = vaddq_s32(e20, r21);
+        int32x4_t ee3 = vaddq_s32(e30, r31);
+
+        int32x4_t eo0 = vsubq_s32(e00, r01);
+        int32x4_t eo1 = vsubq_s32(e10, r11);
+        int32x4_t eo2 = vsubq_s32(e20, r21);
+        int32x4_t eo3 = vsubq_s32(e30, r31);
+
+        int32x4_t t0 = vcombine_s32(vget_low_s32(ee0), vget_low_s32(ee1));
+        int32x4_t t1 = vrev64q_s32(vcombine_s32(vget_high_s32(ee0), vget_high_s32(ee1)));
+        int32x4_t t2 = vcombine_s32(vget_low_s32(ee2), vget_low_s32(ee3));
+        int32x4_t t3 = vrev64q_s32(vcombine_s32(vget_high_s32(ee2), vget_high_s32(ee3)));
+        int32x4_t eee0 = vaddq_s32(t0, t1);
+        int32x4_t eee1 = vaddq_s32(t2, t3);
+        int32x4_t eeo0 = vsubq_s32(t0, t1);
+        int32x4_t eeo1 = vsubq_s32(t2, t3);
+
+        // Odd parts (k = 1,3,5,7,9,11,13,15)
         for (int k = 1; k < 16; k += 2)
         {
-            int16x8_t c0_c4 = vld1q_s16(&g_t16[k][0]);
+            const int16x8_t c = vld1q_s16(&g_t16[k][0]);
 
-            int64x2_t t0 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 0]);
-            int64x2_t t1 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 1]);
-            int64x2_t t2 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 2]);
-            int64x2_t t3 = x265_sdotq_s16(vdupq_n_s64(0), c0_c4, O[i + 3]);
+            int64x2_t tt0 = x265_sdotq_s16(vdupq_n_s64(0), c, o0);
+            int64x2_t tt1 = x265_sdotq_s16(vdupq_n_s64(0), c, o1);
+            int64x2_t tt2 = x265_sdotq_s16(vdupq_n_s64(0), c, o2);
+            int64x2_t tt3 = x265_sdotq_s16(vdupq_n_s64(0), c, o3);
+            int32x4_t t01 = vcombine_s32(vmovn_s64(tt0), vmovn_s64(tt1));
+            int32x4_t t23 = vcombine_s32(vmovn_s64(tt2), vmovn_s64(tt3));
 
-            int32x4_t t01 = vcombine_s32(vmovn_s64(t0), vmovn_s64(t1));
-            int32x4_t t23 = vcombine_s32(vmovn_s64(t2), vmovn_s64(t3));
             int16x4_t res = vrshrn_n_s32(vpaddq_s32(t01, t23), shift);
             vst1_s16(dst + k * line, res);
         }
 
+        // EO parts (k = 2,6,10,14)
         for (int k = 2; k < 16; k += 4)
         {
-            int32x4_t c0 = x265_vld1sh_s32(&g_t16[k][0]);
+            const int32x4_t c = vld1q_s32(&t16_eo_s32[k - 2]);
 
-            int32x4_t t0 = vmulq_s32(c0, EO[i + 0]);
-            int32x4_t t1 = vmulq_s32(c0, EO[i + 1]);
-            int32x4_t t2 = vmulq_s32(c0, EO[i + 2]);
-            int32x4_t t3 = vmulq_s32(c0, EO[i + 3]);
-            int32x4_t t = vpaddq_s32(vpaddq_s32(t0, t1), vpaddq_s32(t2, t3));
+            int32x4_t tt0 = vmulq_s32(c, eo0);
+            int32x4_t tt1 = vmulq_s32(c, eo1);
+            int32x4_t tt2 = vmulq_s32(c, eo2);
+            int32x4_t tt3 = vmulq_s32(c, eo3);
+            int32x4_t tt = vpaddq_s32(vpaddq_s32(tt0, tt1), vpaddq_s32(tt2, tt3));
 
-            int16x4_t res = vrshrn_n_s32(t, shift);
+            int16x4_t res = vrshrn_n_s32(tt, shift);
             vst1_s16(dst + k * line, res);
         }
 
-        int32x4_t c0 = vld1q_s32(t8_even[0]);
-        int32x4_t c4 = vld1q_s32(t8_even[1]);
-        int32x4_t c8 = vld1q_s32(t8_even[2]);
-        int32x4_t c12 = vld1q_s32(t8_even[3]);
-
-        int32x4_t t0 = vpaddq_s32(EEE[i / 2 + 0], EEE[i / 2 + 1]);
-        int32x4_t t1 = vmulq_s32(c0, t0);
-        int16x4_t res0 = vrshrn_n_s32(t1, shift);
+        // EE parts (k = 0,4,8,12)
+        int32x4_t sum = vpaddq_s32(eee0, eee1);
+        int16x4_t res0 = vrshrn_n_s32(sum, 4);
         vst1_s16(dst + 0 * line, res0);
 
-        int32x4_t t2 = vmulq_s32(c4, EEO[i / 2 + 0]);
-        int32x4_t t3 = vmulq_s32(c4, EEO[i / 2 + 1]);
-        int16x4_t res4 = vrshrn_n_s32(vpaddq_s32(t2, t3), shift);
+        int32x4_t res4_lo = vmulq_s32(c2, eeo0);
+        int32x4_t res4_hi = vmulq_s32(c2, eeo1);
+        int16x4_t res4 = vrshrn_n_s32(vpaddq_s32(res4_lo, res4_hi), shift);
         vst1_s16(dst + 4 * line, res4);
 
-        int32x4_t t4 = vmulq_s32(c8, EEE[i / 2 + 0]);
-        int32x4_t t5 = vmulq_s32(c8, EEE[i / 2 + 1]);
-        int16x4_t res8 = vrshrn_n_s32(vpaddq_s32(t4, t5), shift);
+        int32x4_t diff_lo = vsubq_s32(eee0, vrev64q_s32(eee0));
+        int32x4_t diff_hi = vsubq_s32(eee1, vrev64q_s32(eee1));
+        int32x4_t diff = vuzp1q_s32(diff_lo, diff_hi);
+        int16x4_t res8 = vrshrn_n_s32(diff, 4);
         vst1_s16(dst + 8 * line, res8);
 
-        int32x4_t t6 = vmulq_s32(c12, EEO[i / 2 + 0]);
-        int32x4_t t7 = vmulq_s32(c12, EEO[i / 2 + 1]);
-        int16x4_t res12 = vrshrn_n_s32(vpaddq_s32(t6, t7), shift);
+        int32x4_t res12_lo = vmulq_s32(c6, eeo0);
+        int32x4_t res12_hi = vmulq_s32(c6, eeo1);
+        int16x4_t res12 = vrshrn_n_s32(vpaddq_s32(res12_lo, res12_hi), shift);
         vst1_s16(dst + 12 * line, res12);
 
         dst += 4;
