@@ -2334,6 +2334,8 @@ void x265_print_params(x265_param* param)
 #if ENABLE_HDR10_PLUS
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
 #endif
+    if(param->bEnableTemporalFilter)
+        TOOLOPT(param->bEnableTemporalFilter, "mcstf");
     x265_log(param, X265_LOG_INFO, "tools:%s\n", buf);
     fflush(stderr);
 }
