@@ -388,17 +388,10 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
     
     if (p->bThreadedME)
     {
-        /**
-         * TODO: The following thread split decision has only been tuned
-         * for ultrafast and medium presets. Tuning for other presets
-         * needs to be completed.
-         */
-        int targetTME = getTmeThreadCount(p, totalNumThreads);
+        int targetTME = configureTmeThreadCount(p, totalNumThreads);
+        targetTME = (targetTME < 1) ? 1 : targetTME;
+
         threadsFrameEnc = totalNumThreads - targetTME;
-
-        if (targetTME < 1)
-            targetTME = 1;
-
         int defaultNumFT = getFrameThreadsCount(p, totalNumThreads);
         if (threadsFrameEnc < defaultNumFT)
         {
@@ -826,18 +819,75 @@ int ThreadPool::getFrameThreadsCount(x265_param* p, int cpuCount)
         return 1;
 }
 
-int ThreadPool::getTmeThreadCount(x265_param* param, int cpuCount)
+int ThreadPool::configureTmeThreadCount(x265_param* param, int cpuCount)
 {
-    bool isHighRes = (param->sourceWidth > 2000);
-
-    // ultrafast preset or similar options
-    if (!param->subpelRefine || param->minCUSize >= 16)
+    enum TmeResClass
     {
-        if (isHighRes) return cpuCount / 2;
+        TME_RES_LOW = 0,
+        TME_RES_MID,
+        TME_RES_HIGH,
+        TME_RES_COUNT
+    };
+
+    enum TmeRule
+    {
+        TME_RULE_FAST_MEDIUM_SLOW = 0,
+        TME_RULE_FASTER,
+        TME_RULE_VERYFAST,
+        TME_RULE_SUPERFAST,
+        TME_RULE_ULTRAFAST,
+        TME_RULE_COUNT
+    };
+
+    struct TmeRuleConfig
+    {
+        int taskBlockSize[TME_RES_COUNT];
+        int numBufferRows[TME_RES_COUNT];
+        int threadPercent[TME_RES_COUNT];
+        bool widthBasedTaskBlockSize;
+    };
+
+    static const TmeRuleConfig s_tmeRuleConfig[TME_RULE_COUNT] =
+    {
+        { { 1, 1, 1 }, { 10, 10, 10 }, { 90, 80, 70 }, false }, // fast / medium and slower presets
+        { { 1, 1, 1 }, { 10, 15, 10 }, { 90, 80, 70 }, false }, // faster preset and similar options
+        { { 1, 1, 1 }, { 10, 15, 20 }, { 90, 80, 70 }, false }, // veryfast preset and similar options
+        { { 2, 4, 4 }, { 10, 15, 20 }, { 90, 80, 60 }, false }, // superfast preset and similar options
+        { { 0, 0, 0 }, { 15, 20, 20 }, { 90, 80, 50 }, true  }  // ultrafast preset and similar options
+    };
+
+    const int resClass = (param->sourceHeight >= 1440) ? TME_RES_HIGH :
+                         (param->sourceHeight <= 720) ? TME_RES_LOW : TME_RES_MID;
+
+    const bool ruleMatches[TME_RULE_COUNT] =
+    {
+        param->maxNumReferences >= 3 && param->subpelRefine >= 2,
+        param->maxNumReferences >= 2 && param->subpelRefine >= 2,
+        param->subpelRefine >= 1 && param->bframes > 3,
+        param->subpelRefine && param->maxCUSize < 64,
+        !param->subpelRefine || param->searchMethod == X265_DIA_SEARCH || param->minCUSize >= 16
+    };
+
+    int selectedRule = -1;
+    for (int i = 0; i < TME_RULE_COUNT; i++)
+    {
+        if (ruleMatches[i])
+        {
+            selectedRule = i;
+            break;
+        }
     }
 
-    if (isHighRes) return (cpuCount * 7) / 10;
-    else return (cpuCount * 4) / 5;
+    if (selectedRule >= 0)
+    {
+        const TmeRuleConfig& cfg = s_tmeRuleConfig[selectedRule];
+        param->tmeTaskBlockSize = cfg.widthBasedTaskBlockSize ? ((param->sourceWidth + 480 - 1) / 480) : cfg.taskBlockSize[resClass];
+        param->tmeNumBufferRows = cfg.numBufferRows[resClass];
+        return (cpuCount * cfg.threadPercent[resClass]) / 100;
+    }
+
+    static const int s_defaultThreadPercent[TME_RES_COUNT] = { 80, 80, 70 };
+    return (cpuCount * s_defaultThreadPercent[resClass]) / 100;
 }
 
 } // end namespace X265_NS

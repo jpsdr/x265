@@ -118,11 +118,6 @@ struct MEData
     uint32_t cost;
 };
 
-struct CTUMVInfo
-{
-    MEData* m_meData;
-};
-
 struct CTUTask
 {
     uint64_t seq;
@@ -191,11 +186,6 @@ public:
      * @brief Creates threadpool, thread local data and registers itself as a job provider
      */
     bool create();
-
-    /**
-     * @brief Configure ThreadedME parameters to match workload 
-     */
-    void configure();
 
     /**
      * @brief Initialize lookup table used to index PU offsets for all valid CTU sizes.

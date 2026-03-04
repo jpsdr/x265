@@ -45,25 +45,10 @@ bool ThreadedME::create()
 
     initPuStartIdx();
 
-    configure();
-
     /* start sequence at zero */
     m_enqueueSeq = 0ULL;
 
     return true;
-}
-
-void ThreadedME::configure()
-{
-    if (!m_param->tmeTaskBlockSize)
-    {
-        m_param->tmeTaskBlockSize = m_param->sourceWidth / 480;
-    }
-
-    if (!m_param->tmeNumBufferRows)
-    {
-        m_param->tmeNumBufferRows = 10;
-    }
 }
 
 void ThreadedME::initPuStartIdx()

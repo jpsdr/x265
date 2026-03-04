@@ -36,7 +36,7 @@ class PicList;
 class PicYuv;
 class MotionReference;
 
-struct CTUMVInfo;
+struct MEData;
 
 enum SliceType
 {
@@ -381,7 +381,7 @@ public:
     WeightParam m_weightPredTable[2][MAX_NUM_REF][3]; // [list][refIdx][0:Y, 1:U, 2:V]
     MotionReference (*m_mref)[MAX_NUM_REF + 1];
     RPS         m_rps;
-    CTUMVInfo*  m_ctuMV;
+    MEData*     m_ctuMV;
 
     NalUnitType m_nalUnitType;
     SliceType   m_sliceType;

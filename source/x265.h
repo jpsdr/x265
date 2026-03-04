@@ -2341,7 +2341,10 @@ typedef struct x265_param
     int      searchRangeForLayer2;
 
     /* Threaded ME */
+    /* Number of CTUs processed at once when a worker thread picks up a task from ThreadedME. */
     int      tmeTaskBlockSize;
+    
+    /* Number of rows upto which ThreadedME processes tasks ahead of WPP */
     int      tmeNumBufferRows;
 
     /*SBRC*/

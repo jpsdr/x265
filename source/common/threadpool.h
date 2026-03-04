@@ -107,7 +107,7 @@ public:
     static int  getCpuCount();
     static int  getNumaNodeCount();
     static int  getFrameThreadsCount(x265_param* p, int cpuCount);
-    static int  getTmeThreadCount(x265_param* p, int cpuCount);
+    static int  configureTmeThreadCount(x265_param* p, int cpuCount);
 };
 
 /* Any worker thread may enlist the help of idle worker threads from the same

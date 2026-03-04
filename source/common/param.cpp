@@ -491,8 +491,6 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->rc.hevcAq = 0;
             param->rc.qgSize = 32;
             param->bEnableFastIntra = 1;
-            param->tmeTaskBlockSize = 0; // Auto-detect
-            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "superfast"))
         {
@@ -514,8 +512,6 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->rc.qgSize = 32;
             param->bEnableSAO = 0;
             param->bEnableFastIntra = 1;
-            param->tmeTaskBlockSize = 0; // Auto-detect
-            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "veryfast"))
         {
@@ -530,8 +526,6 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
             param->maxNumReferences = 2;
             param->rc.qgSize = 32;
             param->bEnableFastIntra = 1;
-            param->tmeTaskBlockSize = 0; // Auto-detect
-            param->tmeNumBufferRows = 20;
         }
         else if (!strcmp(preset, "faster"))
         {
@@ -2103,6 +2097,9 @@ void x265_print_params(x265_param* param)
         x265_log(param, X265_LOG_INFO, "Interlaced field inputs             : %s\n", x265_interlace_names[param->interlaceMode]);
 
     x265_log(param, X265_LOG_INFO, "Coding QT: max CU size, min CU size : %d / %d\n", param->maxCUSize, param->minCUSize);
+
+    if (param->bThreadedME)
+        x265_log(param, X265_LOG_INFO, "ThreadedME: task block / buf rows   : %d / %d\n", param->tmeTaskBlockSize, param->tmeNumBufferRows);
 
     x265_log(param, X265_LOG_INFO, "Residual QT: max TU size, max depth : %d / %d inter / %d intra\n",
              param->maxTUSize, param->tuQTMaxInterDepth, param->tuQTMaxIntraDepth);

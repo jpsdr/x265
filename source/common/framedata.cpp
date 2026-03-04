@@ -39,12 +39,9 @@ bool FrameData::create(const x265_param& param, const SPS& sps, int csp)
     m_slice  = new Slice;
     if (m_param->bThreadedME)
     {
-        uint32_t bufferSize = sps.numCuInWidth * sps.numCuInHeight;
-        m_slice->m_ctuMV = (CTUMVInfo*)x265_malloc(sizeof(CTUMVInfo) * bufferSize);
-        for (uint32_t i = 0; i < bufferSize; i++)
-        {
-            m_slice->m_ctuMV[i].m_meData = (MEData*)x265_malloc(sizeof(MEData) * MAX_NUM_PUS_PER_CTU);
-        }
+        uint32_t numCUs = sps.numCuInWidth * sps.numCuInHeight;
+        uint32_t totalPUs = numCUs * MAX_NUM_PUS_PER_CTU;
+        m_slice->m_ctuMV = X265_MALLOC(MEData, totalPUs);
     }
 
     m_picCTU = new CUData[sps.numCUsInFrame];
@@ -105,14 +102,7 @@ void FrameData::destroy()
 {
     delete [] m_picCTU;
 
-    if (m_slice->m_ctuMV)
-    {
-        uint32_t bufferSize = m_slice->m_sps->numCuInWidth * m_slice->m_sps->numCuInHeight;
-        for (uint32_t i = 0; i < bufferSize; i++)
-            x265_free(m_slice->m_ctuMV[i].m_meData);
-
-        x265_free(m_slice->m_ctuMV);
-    }
+    X265_FREE(m_slice->m_ctuMV);
     delete m_slice;
     delete m_saoParam;
 
