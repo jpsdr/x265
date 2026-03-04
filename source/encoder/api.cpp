@@ -910,13 +910,11 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
     bool isMultiPassOpt = param->analysisMultiPassRefine || param->analysisMultiPassDistortion;
 
     //Free memory for Lookahead pointers
-    if (!isMultiPassOpt && param->bDisableLookahead && isVbv)
-    {
-        X265_FREE(analysis->lookahead.satdForVbv);
-        X265_FREE(analysis->lookahead.intraSatdForVbv);
-        X265_FREE(analysis->lookahead.vbvCost);
-        X265_FREE(analysis->lookahead.intraVbvCost);
-    }
+
+    X265_FREE(analysis->lookahead.satdForVbv);
+    X265_FREE(analysis->lookahead.intraSatdForVbv);
+    X265_FREE(analysis->lookahead.vbvCost);
+    X265_FREE(analysis->lookahead.intraVbvCost);
 
     //Free memory for distortionData pointers
     if (analysis->distortionData)
@@ -963,9 +961,12 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
         X265_FREE((analysis->interData)->mv[0]);
         X265_FREE((analysis->interData)->mv[1]);
 
-        if (maxReuseLevel > 4)
+        if ((analysis->interData)->mergeFlag)
         {
             X265_FREE((analysis->interData)->mergeFlag);
+        }
+        if ((analysis->interData)->partSize)
+        {
             X265_FREE((analysis->interData)->partSize);
         }
         if (maxReuseLevel >= 7)
@@ -983,8 +984,10 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
                 }
             }
         }
-        if (((minReuseLevel >= 2) && (minReuseLevel <= 6)) || isMultiPassOpt)
-            X265_FREE((analysis->interData)->ref);
+        if (analysis->interData && analysis->interData->ref)
+        {
+            X265_FREE(analysis->interData->ref);
+        }
         X265_FREE(analysis->interData);
         analysis->interData = NULL;
     }

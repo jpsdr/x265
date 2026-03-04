@@ -72,14 +72,37 @@ using namespace X265_NS;
 
 Analysis::Analysis()
 {
+    m_bTryLossless = false;
+    m_bChromaSa8d = false;
+    m_bHD = false;
+
+    memset(m_modeFlag, 0, sizeof(m_modeFlag));
+    memset(m_checkMergeAndSkipOnly, 0, sizeof(m_checkMergeAndSkipOnly));
+
+    for (int i = 0; i < NUM_CU_DEPTH; i++)
+    {
+        m_modeDepth[i].bestMode = NULL;
+        memset(m_modeDepth[i].pred, 0, sizeof(m_modeDepth[i].pred));
+    }
+
     m_reuseInterDataCTU = NULL;
     m_reuseRef = NULL;
-    m_bHD = false;
-    m_modeFlag[0] = false;
-    m_modeFlag[1] = false;
-    m_checkMergeAndSkipOnly[0] = false;
-    m_checkMergeAndSkipOnly[1] = false;
+    m_reuseDepth = NULL;
+    m_reuseModes = NULL;
+    m_reusePartSize = NULL;
+    m_reuseMergeFlag = NULL;
+    m_reuseMv[0] = NULL;
+    m_reuseMv[1] = NULL;
+    m_reuseMvpIdx[0] = NULL;
+    m_reuseMvpIdx[1] = NULL;
+    cacheCost = NULL;
+    m_additionalCtuInfo = NULL;
+    m_prevCtuInfoChange = NULL;
+
     m_evaluateInter = 0;
+    m_refineLevel = 0;
+
+    memset(m_splitRefIdx, 0, sizeof(m_splitRefIdx));
 }
 
 bool Analysis::create(ThreadLocalData *tld)

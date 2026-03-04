@@ -480,7 +480,21 @@ namespace X265_NS {
         if (output)
             output->release();
         output = NULL;
-    }
+        if (param && api)
+        {
+            api->param_free(param);
+            param = NULL;
+        }
+        // Free dynamically allocated input filenames
+        for (int i = 0; i < MAX_VIEWS; i++)
+        {
+            if (inputfn[i])
+            {
+                X265_FREE(inputfn[i]);
+                inputfn[i] = NULL;
+            }
+        }
+   }
 
     void CLIOptions::printStatus(uint32_t frameNum)
     {
@@ -628,7 +642,6 @@ namespace X265_NS {
         int inputBitDepth = 8;
         int outputBitDepth = 0;
         int reconFileBitDepth = 0;
-        char* inputfn[MAX_VIEWS] = { NULL };
         for (int view = 0; view < MAX_VIEWS; view++)
         {
             inputfn[view] = X265_MALLOC(char, sizeof(char) * 1024);

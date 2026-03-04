@@ -146,11 +146,13 @@ bool Thread::start()
 
 void Thread::stop()
 {
-    if (thread)
+    if (thread){
         pthread_join(thread, NULL);
+        thread = 0;
+    }
 }
 
-Thread::~Thread() {}
+Thread::~Thread() { stop(); }
 
 #endif // if _WIN32
 
