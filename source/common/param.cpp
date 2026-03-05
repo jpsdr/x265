@@ -1815,10 +1815,10 @@ int x265_check_params(x265_param* param)
           " smpte170m, smpte240m, linear, log100, log316, iec61966-2-4, bt1361e,"
           " iec61966-2-1, bt2020-10, bt2020-12, smpte-st-2084, smpte-st-428 or arib-std-b67");
     CHECK(param->vui.matrixCoeffs < 0
-          || param->vui.matrixCoeffs > 14
+          || param->vui.matrixCoeffs > 15
           || param->vui.matrixCoeffs == 3,
           "Matrix Coefficients must be unknown, bt709, fcc, bt470bg, smpte170m,"
-          " smpte240m, gbr, ycgco, bt2020nc, bt2020c, smpte-st-2085, chroma-nc, chroma-c or ictcp");
+          " smpte240m, gbr, ycgco, bt2020nc, bt2020c, smpte-st-2085, chroma-nc, chroma-c, ictcp or ipt-pq-c2");
     CHECK(param->vui.chromaSampleLocTypeTopField < 0
           || param->vui.chromaSampleLocTypeTopField > 5,
           "Chroma Sample Location Type Top Field must be 0-5");
