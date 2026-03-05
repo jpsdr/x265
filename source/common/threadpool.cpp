@@ -579,7 +579,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
             
             if (!pools[i].create(numThreads, maxProviders, nodeMaskPerPool[node]))
             {
-                X265_FREE(pools);
+                delete[] pools;
                 numPools = 0;
                 return NULL;
             }
