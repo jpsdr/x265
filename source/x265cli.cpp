@@ -129,6 +129,7 @@ namespace X265_NS {
         H0("   --[no-]slices <integer>       Enable Multiple Slices feature. Default %d\n", param->maxSlices);
         H0("   --[no-]pmode                  Parallel mode analysis. Deprecated from release 4.1. Default %s\n", OPT(param->bDistributeModeAnalysis));
         H0("   --[no-]pme                    Parallel motion estimation. Deprecated from release 4.1. Default %s\n", OPT(param->bDistributeMotionEstimation));
+        H0("   --[no-]threaded-me            Enables standalone multi-threaded module for motion estimation at CTU level. Default %s\n", OPT(param->bThreadedME));
         H0("   --[no-]asm <bool|int|string>  Override CPU detection. Default: auto\n");
         H0("\nPresets:\n");
         H0("-p/--preset <string>             Trade off performance for compression efficiency. Default medium\n");
@@ -530,7 +531,21 @@ namespace X265_NS {
         if (output)
             output->release();
         output = NULL;
-    }
+        if (param && api)
+        {
+            api->param_free(param);
+            param = NULL;
+        }
+        // Free dynamically allocated input filenames
+        for (int i = 0; i < MAX_VIEWS; i++)
+        {
+            if (inputfn[i])
+            {
+                X265_FREE(inputfn[i]);
+                inputfn[i] = NULL;
+            }
+        }
+   }
 
     void CLIOptions::printStatus(uint32_t frameNum)
     {
@@ -704,7 +719,6 @@ namespace X265_NS {
         int inputBitDepth = 8;
         int outputBitDepth = 0;
         int reconFileBitDepth = 0;
-        char* inputfn[MAX_VIEWS] = { NULL };
         for (int view = 0; view < MAX_VIEWS; view++)
         {
             inputfn[view] = X265_MALLOC(char, sizeof(char) * 1024);

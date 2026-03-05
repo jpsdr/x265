@@ -416,6 +416,8 @@ static const struct option long_options[] =
     { "aom-film-grain", required_argument, NULL, 0 },
     { "frame-rc",no_argument, NULL, 0 },
     { "no-frame-rc",no_argument, NULL, 0 },
+    { "threaded-me", no_argument, NULL, 0 },
+    { "no-threaded-me", no_argument, NULL, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
@@ -453,6 +455,7 @@ static const struct option long_options[] =
         char** orgArgv;
         char** argString;
         char *stringPool;
+        char* inputfn[MAX_VIEWS];
 
         /* ABR ladder settings */
         bool isAbrLadderConfig;
