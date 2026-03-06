@@ -455,7 +455,7 @@ static const struct option long_options[] =
         char** orgArgv;
         char** argString;
         char *stringPool;
-        char* inputfn[MAX_VIEWS];
+        char* inputfn[MAX_VIEWS] = {NULL};
 
         /* ABR ladder settings */
         bool isAbrLadderConfig;

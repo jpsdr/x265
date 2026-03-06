@@ -172,7 +172,7 @@ void Analysis::computeMVForPUs(CUData& ctu, const CUGeom& cuGeom, int qp, Frame&
     uint32_t cuX = ctu.m_cuPelX + g_zscanToPelX[cuGeom.absPartIdx];
     uint32_t cuY = ctu.m_cuPelY + g_zscanToPelY[cuGeom.absPartIdx];
 
-    if (!(cuSize == m_param->maxCUSize))
+    if (cuSize != m_param->maxCUSize)
     {
         uint32_t subCUSize = m_param->maxCUSize / 2;
         areaId = (cuX >= subCUSize) + 2 * (cuY >= subCUSize) + 1;

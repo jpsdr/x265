@@ -378,7 +378,7 @@ namespace X265_NS {
         H0("                                 smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1,\n");
         H0("                                 bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67. Default unknown\n");
         H1("   --colormatrix <string>        Specify color matrix setting from unknown, bt709, fcc, bt470bg, smpte170m,\n");
-        H1("                                 smpte240m, gbr, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp. Default unknown\n");
+        H1("                                 smpte240m, gbr, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp, ipt-pq-c2. Default unknown\n");
         H1("   --chromaloc <integer>         Specify chroma sample location (0 to 5). Default of %d\n", param->vui.chromaSampleLocTypeTopField);
         H0("   --master-display <string>     SMPTE ST 2086 master display color volume info SEI (HDR)\n");
         H0("                                    format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\n");

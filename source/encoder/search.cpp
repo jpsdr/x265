@@ -286,7 +286,7 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                         int neighIdx = neighborIdx[dir];
                         if (neighIdx >= 0)
                         {
-                            MEData& neighborData = slice->m_ctuMV[slotIdx].m_meData[neighIdx];
+                            MEData& neighborData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + neighIdx];
                             for (int i = 0; i < 2; i++)
                             {
                                 neighbours[dir].mv[i] = neighborData.mv[i];
@@ -311,8 +311,7 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                     }
                     else if (slice->m_refFrameList[list][ref]->m_encData->m_slice->m_sliceType != I_SLICE)
                     {
-                        CTUMVInfo& ctuMV = slice->m_refFrameList[list][ref]->m_encData->m_slice->m_ctuMV[slotIdx];
-                        MEData meData = ctuMV.m_meData[pos];
+                        MEData meData = slice->m_refFrameList[list][ref]->m_encData->m_slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + pos];
 
                         bool bi = (meData.ref[0] >= 0 && meData.ref[1] >= 0);
                         bool uniL0 = (meData.ref[0] >= 0 && meData.ref[1] == REF_NOT_VALID);
@@ -505,8 +504,7 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                 }
             }
         }
-        CTUMVInfo & ctuInfo = slice->m_ctuMV[slotIdx];
-        MEData& outME = ctuInfo.m_meData[pos];
+        MEData& outME = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + pos];
 
         outME.ref[0] = REF_NOT_VALID;
         outME.ref[1] = REF_NOT_VALID;
@@ -3025,8 +3023,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
             int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
 
-            CTUMVInfo& ctuInfo = slice->m_ctuMV[slotIdx];
-            MEData meData = ctuInfo.m_meData[index];
+            MEData meData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + index];
 
             bestME[0].ref = meData.ref[0];
             bestME[1].ref = meData.ref[1];

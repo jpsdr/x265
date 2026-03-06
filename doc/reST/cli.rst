@@ -2440,6 +2440,7 @@ VUI fields must be manually specified.
 	12. chroma-derived-nc
 	13. chroma-derived-c
 	14. ictcp
+	15. ipt-pq-c2
 
 .. option:: --chromaloc <0..5>
 
