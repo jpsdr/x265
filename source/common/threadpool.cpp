@@ -831,7 +831,9 @@ int ThreadPool::configureTmeThreadCount(x265_param* param, int cpuCount)
 
     enum TmeRule
     {
-        TME_RULE_FAST_MEDIUM_SLOW = 0,
+        TME_RULE_SLOWER_VERYSLOW = 0,
+        TME_RULE_SLOW,
+        TME_RULE_FAST_MEDIUM,
         TME_RULE_FASTER,
         TME_RULE_VERYFAST,
         TME_RULE_SUPERFAST,
@@ -849,7 +851,9 @@ int ThreadPool::configureTmeThreadCount(x265_param* param, int cpuCount)
 
     static const TmeRuleConfig s_tmeRuleConfig[TME_RULE_COUNT] =
     {
-        { { 1, 1, 1 }, { 10, 10, 10 }, { 90, 80, 70 }, false }, // fast / medium and slower presets
+        { { 1, 1, 1 }, { 3, 3, 3 }, { 90, 85, 70 }, false }, // slower / veryslow preset and similar options
+        { { 1, 1, 1 }, { 5, 5, 3 }, { 90, 85, 75 }, false }, // slow preset and similar options
+        { { 1, 1, 1 }, { 10, 10, 10 }, { 90, 80, 70 }, false }, // fast / medium preset and similar options
         { { 1, 1, 1 }, { 10, 15, 10 }, { 90, 80, 70 }, false }, // faster preset and similar options
         { { 1, 1, 1 }, { 10, 15, 20 }, { 90, 80, 70 }, false }, // veryfast preset and similar options
         { { 2, 4, 4 }, { 10, 15, 20 }, { 90, 80, 60 }, false }, // superfast preset and similar options
@@ -861,6 +865,8 @@ int ThreadPool::configureTmeThreadCount(x265_param* param, int cpuCount)
 
     const bool ruleMatches[TME_RULE_COUNT] =
     {
+        param->maxNumReferences >= 5 || param->subpelRefine >= 4 || (param->bEnableRectInter && param->bEnableAMP),
+        param->maxNumReferences >= 4 || param->subpelRefine >= 3 || (param->bEnableRectInter ^ param->bEnableAMP),
         param->maxNumReferences >= 3 && param->subpelRefine >= 2,
         param->maxNumReferences >= 2 && param->subpelRefine >= 2,
         param->subpelRefine >= 1 && param->bframes > 3,
