@@ -87,11 +87,11 @@ public:
         }
 
         int chroma_offset_idx = X265_MIN(qp - qpCb + 12, MAX_CHROMA_LAMBDA_OFFSET);
-		uint16_t lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
+        uint16_t lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
         m_chromaDistWeight[0] = lambdaOffset;
 
         chroma_offset_idx = X265_MIN(qp - qpCr + 12, MAX_CHROMA_LAMBDA_OFFSET);
-		lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
+        lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
         m_chromaDistWeight[1] = lambdaOffset;
     }
 
