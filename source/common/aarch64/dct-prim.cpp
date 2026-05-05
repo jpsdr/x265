@@ -14,9 +14,6 @@
 #define X265_PRAGMA_UNROLL(n)
 #endif
 
-extern "C" void PFX(dct16_neon)(const int16_t *src, int16_t *dst, intptr_t srcStride);
-extern "C" void PFX(idct16_neon)(const int16_t *src, int16_t *dst, intptr_t dstStride);
-
 namespace
 {
 using namespace X265_NS;
