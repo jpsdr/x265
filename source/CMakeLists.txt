@@ -92,7 +92,7 @@ elseif(ARM64MATCH GREATER "-1")
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
     option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin|Windows")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD|Darwin|Windows")
         set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
         message(STATUS "Run-time CPU feature detection unsupported on this platform")
     endif()
@@ -121,6 +121,10 @@ elseif(RISCV64MATCH GREATER "-1")
     set(RISCV64 1)
 
     option(RISCV64_RUNTIME_CPU_DETECT "Enable RISCV64 run-time CPU feature detection" ON)
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD")
+        set(RISCV64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
+        message(STATUS "Run-time CPU feature detection unsupported on this platform")
+    endif()
 
     option(ENABLE_RVV "Enable RVV" ON)
 
@@ -662,6 +666,16 @@ endif()
 
 if(ENABLE_ASSEMBLY)
    add_definitions(-DENABLE_ASSEMBLY)
+endif()
+
+check_symbol_exists(getauxval sys/auxv.h HAVE_GETAUXVAL)
+if(HAVE_GETAUXVAL)
+    add_definitions(-DHAVE_GETAUXVAL=1)
+endif()
+
+check_symbol_exists(elf_aux_info sys/auxv.h HAVE_ELF_AUX_INFO)
+if(HAVE_ELF_AUX_INFO)
+    add_definitions(-DHAVE_ELF_AUX_INFO=1)
 endif()
 
 option(CHECKED_BUILD "Enable run-time sanity checks (debugging)" OFF)
