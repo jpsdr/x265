@@ -149,6 +149,7 @@ unsigned long x265_getauxval(unsigned long type)
     elf_aux_info(type, &aux, sizeof(aux));
     return aux;
 #else
+    (void)type;
     return 0;
 #endif
 }
