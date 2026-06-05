@@ -55,7 +55,7 @@ static int parse_proc_cpuinfo(const char *flag) {
 }
 #endif
 
-static inline uint32_t riscv64_cpu_detect()
+static inline uint32_t riscv64_get_cpu_flags()
 {
     uint32_t flags = 0;
 
@@ -79,6 +79,13 @@ static inline uint32_t riscv64_cpu_detect()
     "available for your platform. Rerun cmake configure with"          \
     "-DRISCV64_RUNTIME_CPU_DETECT=OFF."
 #endif // HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+
+static inline uint32_t riscv64_cpu_detect()
+{
+  uint32_t flags = riscv64_get_cpu_flags();
+
+  return flags;
+}
 
 #else // if RISCV64_RUNTIME_CPU_DETECT
 
