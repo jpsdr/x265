@@ -591,7 +591,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
             
             while (!threadsPerPool[node])
                 node++;
-            int numThreads = threadsPerPool[node];
+            int numThreads = (p->bThreadedME) ? threadsPerPool[node] : X265_MIN(MAX_POOL_THREADS, threadsPerPool[node]);
             int origNumThreads = numThreads;
 
             if (i == 0 && p->lookaheadThreads > numThreads / 2)
