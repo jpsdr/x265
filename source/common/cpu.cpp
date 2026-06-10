@@ -135,6 +135,9 @@ const cpu_name_t cpu_names[] =
 #elif X265_ARCH_RISCV64
     { "RVV",           X265_CPU_RVV },
     { "Zbb",           X265_CPU_ZBB },
+#elif X265_ARCH_LOONGARCH64
+    { "LSX",             X265_CPU_LSX},
+    { "LASX",            X265_CPU_LASX},
 
 #endif // if X265_ARCH_X86
     { "", 0 },
@@ -175,7 +178,7 @@ bool detect512()
 uint32_t cpu_detect(bool benableavx512 )
 {
 
-    uint32_t cpu = 0; 
+    uint32_t cpu = 0;
     uint32_t eax, ebx, ecx, edx;
     uint32_t vendor[4] = { 0 };
     uint32_t max_extended_cap, max_basic_cap;
@@ -448,6 +451,20 @@ uint32_t cpu_detect(bool benableavx512)
 
 #ifdef ENABLE_ASSEMBLY
     flags = riscv64_cpu_detect();
+#endif
+
+    return flags;
+}
+
+#elif X265_ARCH_LOONGARCH64
+#include "loongarch64/cpu.h"
+
+uint32_t cpu_detect( bool benableavx512 )
+{
+    uint32_t flags = 0;
+
+#ifdef ENABLE_ASSEMBLY
+    flags = loongarch64_cpu_detect();
 #endif
 
     return flags;
