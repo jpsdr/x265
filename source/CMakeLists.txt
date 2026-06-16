@@ -138,7 +138,7 @@ elseif(LOONGARCH64MATCH GREATER "-1")
     message(STATUS "Detected LOONGARCH64 target processor")
 
     option(LOONGARCH64_RUNTIME_CPU_DETECT "Enable LOONGARCH64 run-time CPU feature detection" ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux")
         set(LOONGARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
         message(STATUS "Run-time CPU feature detection unsupported on this platform")
     endif()
