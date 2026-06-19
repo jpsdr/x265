@@ -609,8 +609,9 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
                 numThreads -= p->lookaheadThreads;
 
             if (!p->bThreadedME)
+            {
                 X265_CHECK(numThreads <= MAX_POOL_THREADS, "a single thread pool cannot have more than MAX_POOL_THREADS threads\n");
-
+            }
             if (!pools[i].create(numThreads, maxProviders, nodeMaskPerPool[node]))
             {
                 delete[] pools;
