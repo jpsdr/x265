@@ -1254,7 +1254,9 @@ void Lookahead::checkLookaheadQueue(int &frameCnt)
 void Lookahead::flush()
 {
     /* force slicetypeDecide to run until the input queue is empty */
+    m_inputLock.acquire();
     m_fullQueueSize = 1;
+    m_inputLock.release();
     m_filled = true;
 }
 
@@ -1323,7 +1325,9 @@ Frame* Lookahead::getDecidedPicture()
         if (wait)
             m_outputSignal.wait();
 
+        m_outputLock.acquire();
         out = m_outputQueue.popFront();
+        m_outputLock.release();
         if (out)
             m_inputCount--;
         return out;
@@ -2175,6 +2179,7 @@ void Lookahead::slicetypeDecide()
         /* pre-calculate all motion searches, using many worker threads */
         CostEstimateGroup estGroup(*this, frames);
         Frame* frameEnc = m_inputQueue.first();
+        m_inputLock.acquire();
         for (int b = 0; b < m_inputQueue.size(); b++)
         {
             if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc->m_mcstf->m_sliceTypeConfig, frameEnc->m_lowres.sliceType))
@@ -2199,6 +2204,7 @@ void Lookahead::slicetypeDecide()
             }
             frameEnc = frameEnc->m_next;
         }
+        m_inputLock.release();
 
         /* auto-disable after the first batch if pool is small */
         m_bBatchMotionSearch &= m_pool->m_numWorkers >= 4;
@@ -4098,8 +4104,9 @@ void CostEstimateGroup::processTasks(int workerThreadID)
             ProfileScopeEvent(estCostSingle);
 
             Estimate& e = m_estimates[i];
+            m_lookahead.m_inputLock.acquire();
             Frame* curFrame = m_lookahead.m_inputQueue.getPOC(e.b);
-
+            m_lookahead.m_inputLock.release();
             if (m_lookahead.m_param->bEnableTemporalFilter && curFrame && (curFrame->m_lowres.sliceType == X265_TYPE_IDR || curFrame->m_lowres.sliceType == X265_TYPE_I || curFrame->m_lowres.sliceType == X265_TYPE_P))
             {
                 estimatelowresmotion(m_metld, curFrame, e.p0);
@@ -4257,7 +4264,7 @@ void CostEstimateGroup::estimateCUCost(LookaheadTLD& tld, int cuX, int cuY, int 
     Lowres *fref1 = m_frames[p1];
     Lowres *fenc  = m_frames[b];
 
-    ReferencePlanes *wfref0 = fenc->weightedRef[b - p0].isWeighted && !hme ? &fenc->weightedRef[b - p0] : fref0;
+    ReferencePlanes *wfref0 = (bool)fenc->weightedRef[b - p0].isWeighted && !hme ? &fenc->weightedRef[b - p0] : fref0;
 
     const int widthInCU = hme ? m_lookahead.m_4x4Width : m_lookahead.m_8x8Width;
     const int heightInCU = hme ? m_lookahead.m_4x4Height : m_lookahead.m_8x8Height;

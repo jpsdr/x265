@@ -40,6 +40,7 @@
 #include "dpb.h"
 #include "nal.h"
 #include "threadedme.h"
+#include "ratecontrol.h"
 
 #include "x265.h"
 
@@ -1053,7 +1054,13 @@ void Encoder::updateVbvPlan(RateControl* rc)
         FrameEncoder *encoder = m_frameEncoder[i];
         if (encoder->m_rce.isActive && encoder->m_rce.poc != rc->m_curSlice->m_poc)
         {
-            int64_t bits = m_param->rc.bEnableConstVbv ? (int64_t)encoder->m_rce.frameSizePlanned : (int64_t)X265_MAX(encoder->m_rce.frameSizeEstimated, encoder->m_rce.frameSizePlanned);
+            double frameSizeEst, frameSizePlan;
+            {
+                ScopedLock lock(encoder->m_rce.m_rateControlEntryLock);
+                frameSizeEst  = encoder->m_rce.frameSizeEstimated;
+                frameSizePlan = encoder->m_rce.frameSizePlanned;
+            }
+            int64_t bits = m_param->rc.bEnableConstVbv ? (int64_t)frameSizePlan : (int64_t)X265_MAX(frameSizeEst, frameSizePlan);
             rc->m_bufferFill -= bits;
             rc->m_bufferFill = X265_MAX(rc->m_bufferFill, 0);
             rc->m_bufferFill += encoder->m_rce.bufferRate;
@@ -3208,8 +3215,11 @@ void Encoder::finishFrameStats(Frame* curFrame, FrameEncoder *curEncoder, x265_f
         frameStats->bScenecut = curFrame->m_lowres.bScenecut;
         if (m_param->csvLogLevel >= 2)
             frameStats->ipCostRatio = curFrame->m_lowres.ipCostRatio;
-        frameStats->bufferFill = m_rateControl->m_bufferFillActual;
-        frameStats->bufferFillFinal = m_rateControl->m_bufferFillFinal;
+        {
+            ScopedLock lock(m_rateControl->m_rateControlLock);
+            frameStats->bufferFill = m_rateControl->m_bufferFillActual;
+            frameStats->bufferFillFinal = m_rateControl->m_bufferFillFinal;
+        }
         if (m_param->csvLogLevel >= 2)
             frameStats->unclippedBufferFillFinal = m_rateControl->m_unclippedBufferFillFinal;
         frameStats->frameLatency = inPoc - poc;

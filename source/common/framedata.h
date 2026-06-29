@@ -126,6 +126,8 @@ public:
     RPS*           m_spsrps;
     int            m_spsrpsIdx;
 
+    Lock m_rowStatLock;
+
     /* Rate control data used during encode and by references */
     struct RCStatCU
     {
@@ -139,12 +141,12 @@ public:
 
     struct RCStatRow
     {
-        uint32_t numEncodedCUs; /* ctuAddr of last encoded CTU in row */
-        uint32_t encodedBits;   /* sum of 'totalBits' of encoded CTUs */
+        AtomicUInt32 numEncodedCUs; /* ctuAddr of last encoded CTU in row */
+        AtomicUInt32 encodedBits;   /* sum of 'totalBits' of encoded CTUs */
         uint32_t satdForVbv;    /* sum of lowres (estimated) costs for entire row */
         uint32_t intraSatdForVbv; /* sum of lowres (estimated) intra costs for entire row */
-        uint32_t rowSatd;
-        uint32_t rowIntraSatd;
+        AtomicUInt32 rowSatd;
+        AtomicUInt32 rowIntraSatd;
         double   rowQp;
         double   rowQpScale;
         double   sumQpRc;

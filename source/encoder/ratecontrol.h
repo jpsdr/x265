@@ -121,6 +121,7 @@ struct RateControlEntry
     int      rpsIdx;
     RPS      rpsData;
     bool     isFadeEnd;
+    Lock m_rateControlEntryLock;
 };
 
 class RateControl
@@ -191,7 +192,7 @@ public:
     double  m_shortTermCplxCount;
     double  m_lastRceq;
     double  m_qCompress;
-    int64_t m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
+    AtomicInt64 m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
     int64_t m_encodedBits;      /* bits used for encoded frames (without ammortization) */
     int64_t m_encodedSegmentBits;      /* bits used for encoded frames in a segment*/
     double  m_movingSumComplexitySeg[3];
@@ -225,8 +226,9 @@ public:
      * rceUpdate 12
      * rceEnd    11 */
     ThreadSafeInteger m_startEndOrder;
-    int     m_finalFrameCount;   /* set when encoder begins flushing */
+    ThreadSafeInteger m_finalFrameCount;   /* set when encoder begins flushing */
     bool    m_bTerminated;       /* set true when encoder is closing */
+    Lock m_rateControlLock;
 
     /* hrd stuff */
     SEIBufferingPeriod m_bufPeriodSEI;

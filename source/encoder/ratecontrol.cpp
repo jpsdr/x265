@@ -202,7 +202,7 @@ RateControl::RateControl(x265_param& p, Encoder *top)
     m_fps = (double)m_param->fpsNum / m_param->fpsDenom;
     m_startEndOrder.set(0);
     m_bTerminated = false;
-    m_finalFrameCount = 0;
+    m_finalFrameCount.set(0);
     m_numEntries = 0;
     m_isSceneTransition = false;
     m_lastPredictorReset = 0;
@@ -2467,7 +2467,7 @@ void RateControl::rateControlUpdateStats(RateControlEntry* rce)
         rce->rowCplxrSum = rce->rowTotalBits * x265_qp2qScale(rce->qpaRc) / (rce->qRceq * fabs(m_param->rc.pbFactor));
 
     m_cplxrSum += rce->rowCplxrSum;
-    m_totalBits += rce->rowTotalBits;
+    m_totalBits.add(rce->rowTotalBits);
 
     /* do not allow the next frame to enter rateControlStart() until this
      * frame has updated its mid-frame statistics */
@@ -2820,7 +2820,10 @@ double RateControl::predictRowsSizeSum(Frame* curFrame, RateControlEntry* rce, d
                 }
 
                 refRowSatdCost >>= X265_DEPTH - 8;
-                refQScale = refEncData.m_rowStat[row].rowQpScale;
+                {
+                    ScopedLock lock(refEncData.m_rowStatLock);
+                    refQScale = refEncData.m_rowStat[row].rowQpScale;
+                }
             }
 
             if (picType == I_SLICE || qScale >= refQScale)
@@ -2917,10 +2920,17 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
         if (!m_isCbr)
             qpMin = X265_MAX(qpMin, rce->qpNoVbv);
 
-        double totalBitsNeeded = m_wantedBitsWindow;
+        double wantedBits;
+        double totalBits;
+        {
+            ScopedLock lock(m_rateControlLock);
+            wantedBits = m_wantedBitsWindow;
+            totalBits = (double)(int64_t)m_totalBits;
+        }
+        double totalBitsNeeded = wantedBits;
         if (m_param->totalFrames)
             totalBitsNeeded = (m_param->totalFrames * m_bitrate) / m_fps;
-        double abrOvershoot = (accFrameBits + m_totalBits - m_wantedBitsWindow) / totalBitsNeeded;
+        double abrOvershoot = (accFrameBits + totalBits - wantedBits) / totalBitsNeeded;
 
         while (qpVbv < qpMax
                && (((accFrameBits > rce->frameSizePlanned + rcTol) ||
@@ -2931,11 +2941,16 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
         {
             qpVbv += stepSize;
             accFrameBits = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
-            abrOvershoot = (accFrameBits + m_totalBits - m_wantedBitsWindow) / totalBitsNeeded;
+            abrOvershoot = (accFrameBits + totalBits - wantedBits) / totalBitsNeeded;
         }
 
+        double row0Qp;
+        {
+            ScopedLock lock(curEncData.m_rowStatLock);
+            row0Qp = curEncData.m_rowStat[0].rowQp;
+        }
         while (qpVbv > qpMin
-               && (qpVbv > curEncData.m_rowStat[0].rowQp || m_singleFrameVbv)
+               && (qpVbv > row0Qp || m_singleFrameVbv)
                && (((accFrameBits < rce->frameSizePlanned * 0.8f && qpVbv <= prevRowQp)
                    || accFrameBits < (rce->bufferFill - m_bufferSize + m_bufferRate) * 1.1
                    || (rce->vbvEndAdj && ((rce->bufferFill - accFrameBits) > (rce->targetFill * vbvEndBias))))
@@ -2943,7 +2958,7 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
         {
             qpVbv -= stepSize;
             accFrameBits = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
-            abrOvershoot = (accFrameBits + m_totalBits - m_wantedBitsWindow) / totalBitsNeeded;
+            abrOvershoot = (accFrameBits + totalBits - wantedBits) / totalBitsNeeded;
         }
 
         if (m_param->rc.bStrictCbr && m_param->totalFrames)
@@ -2954,7 +2969,7 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
             {
                 qpVbv += stepSize;
                 accFrameBits = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
-                abrOvershoot = (accFrameBits + m_totalBits - m_wantedBitsWindow) / totalBitsNeeded;
+                abrOvershoot = (accFrameBits + totalBits - wantedBits) / totalBitsNeeded;
             }
             if (qpVbv > curEncData.m_rowStat[0].rowQp &&
                 abrOvershoot < -0.1 && timeDone > 0.5 && accFrameBits < rce->frameSizePlanned - rcTol)
@@ -2973,8 +2988,10 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
             accFrameBits = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
         }
 
-        rce->frameSizeEstimated = accFrameBits;
-
+        {
+            ScopedLock lock(rce->m_rateControlEntryLock);
+            rce->frameSizeEstimated = accFrameBits;
+        }
         /* If the current row was large enough to cause a large QP jump, try re-encoding it. */
         if (qpVbv > qpMax && prevRowQp < qpMax && canReencodeRow)
         {
@@ -2995,7 +3012,10 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
     else
     {
         int32_t encodedBitsSoFar = 0;
-        rce->frameSizeEstimated = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
+        {
+            ScopedLock lock(rce->m_rateControlEntryLock);
+            rce->frameSizeEstimated = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
+        }
 
         /* Last-ditch attempt: if the last row of the frame underflowed the VBV,
          * try again. */
@@ -3111,11 +3131,13 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
         /* no more frames are being encoded, so fake the start event if we would
          * have blocked on it. Note that this does not enforce rateControlEnd()
          * ordering during flush, but this has no impact on the outputs */
-        if (m_finalFrameCount && orderValue >= 2 * m_finalFrameCount)
+        int finalFrameCount = m_finalFrameCount.get();
+        if (finalFrameCount && orderValue >= 2 * finalFrameCount)
             break;
         orderValue = m_startEndOrder.waitForChange(orderValue);
     }
 
+    ScopedLock lock(m_rateControlLock);
     FrameData& curEncData = *curFrame->m_encData;
     int64_t actualBits = bits;
     Slice *slice = curEncData.m_slice;
@@ -3220,7 +3242,7 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
             m_cplxrSum += (bits * x265_qp2qScale(rce->qpaRc) / (rce->qRceq * fabs(m_param->rc.pbFactor))) - (rce->rowCplxrSum);
         }
         m_wantedBitsWindow += m_frameDuration * (m_bRcReConfig ? (curFrame->m_targetBitrate * 1000) : m_bitrate);
-        m_totalBits += bits - rce->rowTotalBits;
+        m_totalBits.add(bits - rce->rowTotalBits);
         m_encodedBits += actualBits;
         m_encodedSegmentBits += actualBits;
         m_segDur += m_frameDuration;
@@ -3241,7 +3263,7 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
     if (m_2pass)
     {
         m_expectedBitsSum += qScale2bits(rce, x265_qp2qScale(rce->newQp));
-        m_totalBits += bits - rce->rowTotalBits;
+        m_totalBits.add(bits - rce->rowTotalBits);
     }
 
     if (m_isVbv)
@@ -3390,7 +3412,7 @@ int RateControl::writeRateControlFrameStats(Frame* curFrame, RateControlEntry* r
  * unambiguously known */
 void RateControl::setFinalFrameCount(int count)
 {
-    m_finalFrameCount = count;
+    m_finalFrameCount.set(count);
     /* unblock waiting threads */
     m_startEndOrder.poke();
 }

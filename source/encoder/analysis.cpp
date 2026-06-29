@@ -4120,6 +4120,7 @@ uint32_t Analysis::topSkipMinDepth(const CUData& parentCTU, const CUGeom& cuGeom
     {
         numRefs++;
         const CUData& cu = *m_slice->m_refFrameList[0][0]->m_encData->getPicCTU(parentCTU.m_cuAddr);
+        ScopedLock lock(cu.m_accessLock);
         previousQP = cu.m_qp[0];
         if (!cu.m_cuDepth[cuGeom.absPartIdx])
             return 0;

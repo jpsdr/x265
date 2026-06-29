@@ -158,16 +158,16 @@ void WorkerThread::threadMain()
             /* if the current job provider still wants help, only switch to a
              * higher priority provider (lower slice type). Else take the first
              * available job provider with the highest priority */
-            int curPriority = (m_curJobProvider->m_helpWanted) ? m_curJobProvider->m_sliceType :
+            int curPriority = (bool)m_curJobProvider->m_helpWanted ? m_curJobProvider->m_sliceType.get() :
                                                                  INVALID_SLICE_PRIORITY + 1;
             int nextProvider = -1;
             for (int i = 0; i < m_pool.m_numProviders; i++)
             {
-                if (m_pool.m_jpTable[i]->m_helpWanted &&
-                    m_pool.m_jpTable[i]->m_sliceType < curPriority)
+                if ((bool)m_pool.m_jpTable[i]->m_helpWanted &&
+                    m_pool.m_jpTable[i]->m_sliceType.get() < curPriority)
                 {
                     nextProvider = i;
-                    curPriority = m_pool.m_jpTable[i]->m_sliceType;
+                    curPriority = m_pool.m_jpTable[i]->m_sliceType.get();
                 }
             }
             if (nextProvider != -1 && m_curJobProvider != m_pool.m_jpTable[nextProvider])
@@ -191,7 +191,7 @@ void WorkerThread::threadMain()
 
 void JobProvider::tryWakeOne()
 {
-    int id = m_pool->tryAcquireSleepingThread(m_ownerBitmap, ALL_POOL_THREADS);
+    int id = m_pool->tryAcquireSleepingThread(SLEEPBITMAP_LOAD(&m_ownerBitmap), ALL_POOL_THREADS);
     if (id < 0)
     {
         m_helpWanted = true;
@@ -213,7 +213,7 @@ int ThreadPool::tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitm
 {
     unsigned long id;
 
-    sleepbitmap_t masked = m_sleepBitmap & firstTryBitmap;
+    sleepbitmap_t masked = SLEEPBITMAP_LOAD(&m_sleepBitmap) & firstTryBitmap;
     while (masked)
     {
         SLEEPBITMAP_BSF(id, masked);
@@ -222,10 +222,10 @@ int ThreadPool::tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitm
         if (SLEEPBITMAP_AND(&m_sleepBitmap, ~bit) & bit)
             return (int)id;
 
-        masked = m_sleepBitmap & firstTryBitmap;
+        masked = SLEEPBITMAP_LOAD(&m_sleepBitmap) & firstTryBitmap;
     }
 
-    masked = m_sleepBitmap & secondTryBitmap;
+    masked = SLEEPBITMAP_LOAD(&m_sleepBitmap) & secondTryBitmap;
     while (masked)
     {
         SLEEPBITMAP_BSF(id, masked);
@@ -234,7 +234,7 @@ int ThreadPool::tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitm
         if (SLEEPBITMAP_AND(&m_sleepBitmap, ~bit) & bit)
             return (int)id;
 
-        masked = m_sleepBitmap & secondTryBitmap;
+        masked = SLEEPBITMAP_LOAD(&m_sleepBitmap) & secondTryBitmap;
     }
 
     return -1;
@@ -725,7 +725,7 @@ void ThreadPool::stopWorkers()
         m_isActive = false;
         for (int i = 0; i < m_numWorkers; i++)
         {
-            while (!(m_sleepBitmap & ((sleepbitmap_t)1 << i)))
+            while (!(SLEEPBITMAP_LOAD(&m_sleepBitmap) & ((sleepbitmap_t)1 << i)))
                 GIVE_UP_TIME();
             m_workers[i].awaken();
             m_workers[i].stop();

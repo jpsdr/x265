@@ -70,6 +70,10 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
 #define ATOMIC_ADD(ptr, val)  (sizeof(*(ptr)) == 8 ? \
                                no_atomic_add64((int64_t*)ptr, (int64_t)(val)) : \
                                no_atomic_add((int*)ptr, (int)(val)))
+#define ATOMIC_STORE(ptr, val)    (*(ptr) = (int)(val))
+#define ATOMIC64_LOAD(ptr)        (*(ptr))
+#define ATOMIC64_STORE(ptr, val)  (*(ptr) = (val))
+#define ATOMIC64_ADD(ptr, val)    (*(ptr) += (val))
 #define GIVE_UP_TIME()        usleep(0)
 
 #elif __GNUC__               /* GCCs builtin atomics */
@@ -86,6 +90,10 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
 #define ATOMIC_INC(ptr)       __sync_add_and_fetch((volatile int32_t*)ptr, 1)
 #define ATOMIC_DEC(ptr)       __sync_add_and_fetch((volatile int32_t*)ptr, -1)
 #define ATOMIC_ADD(ptr, val)  __sync_fetch_and_add((volatile __typeof__(*(ptr))*)ptr, (__typeof__(*(ptr) + 0))(val))
+#define ATOMIC_STORE(ptr, val)    __sync_lock_test_and_set((volatile int32_t*)ptr, (int32_t)(val))
+#define ATOMIC64_LOAD(ptr)        __sync_fetch_and_add((volatile int64_t*)ptr, 0)
+#define ATOMIC64_STORE(ptr, val)  __sync_lock_test_and_set((volatile int64_t*)ptr, val)
+#define ATOMIC64_ADD(ptr, val)    __sync_fetch_and_add((volatile int64_t*)ptr, val)
 #define GIVE_UP_TIME()        usleep(0)
 
 #elif defined(_MSC_VER)       /* Windows atomic intrinsics */
@@ -103,6 +111,10 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
                                InterlockedExchangeAdd((volatile LONG*)ptr, (LONG)(val)))
 #define ATOMIC_OR(ptr, mask)  _InterlockedOr((volatile LONG*)ptr, (LONG)mask)
 #define ATOMIC_AND(ptr, mask) _InterlockedAnd((volatile LONG*)ptr, (LONG)mask)
+#define ATOMIC_STORE(ptr, val)    InterlockedExchange((volatile LONG*)ptr, (LONG)(val))
+#define ATOMIC64_LOAD(ptr)        InterlockedAdd64((volatile LONG64*)ptr, 0)
+#define ATOMIC64_STORE(ptr, val)  InterlockedExchange64((volatile LONG64*)ptr, val)
+#define ATOMIC64_ADD(ptr, val)    InterlockedAdd64((volatile LONG64*)ptr, val)
 #define GIVE_UP_TIME()        Sleep(0)
 
 #endif // ifdef __GNUC__
@@ -452,8 +464,9 @@ public:
         pthread_mutex_lock(&m_mutex);
         if (m_val == prev)
             pthread_cond_wait(&m_cond, &m_mutex);
+        int ret = m_val;
         pthread_mutex_unlock(&m_mutex);
-        return m_val;
+        return ret;
     }
 
     int get()
@@ -827,6 +840,144 @@ protected:
 
     // do not allow assignments
     ScopedElapsedTime &operator =(const ScopedElapsedTime &);
+};
+
+/* Atomic wrapper classes for C++98 compatible thread-safe access.
+ * These replace raw ATOMIC_* macro calls at every site with a type
+ * that enforces atomic access automatically through operator overloads.
+ * Declaring a variable as AtomicBool/AtomicInt32/AtomicInt64 makes it
+ * impossible to access it non-atomically by accident. */
+
+class AtomicBool
+{
+public:
+    AtomicBool() : m_val(0) {}
+    AtomicBool(bool v) : m_val(v ? 1 : 0) {}
+
+    operator bool() const
+    {
+        return (int32_t)ATOMIC_OR(&m_val, 0) != 0;
+    }
+
+    AtomicBool& operator=(bool v)
+    {
+        ATOMIC_STORE(&m_val, v ? 1 : 0);
+        return *this;
+    }
+
+private:
+    AtomicBool(const AtomicBool&);
+    AtomicBool& operator=(const AtomicBool&);
+    mutable volatile int32_t m_val;
+};
+
+class AtomicInt32
+{
+public:
+    AtomicInt32() : m_val(0) {}
+    AtomicInt32(int32_t v) : m_val(v) {}
+
+    operator int32_t() const
+    {
+        return (int32_t)ATOMIC_OR(&m_val, 0);
+    }
+
+    AtomicInt32& operator=(int32_t v)
+    {
+        ATOMIC_STORE(&m_val, v);
+        return *this;
+    }
+
+    int32_t operator++()
+    {
+        return (int32_t)ATOMIC_INC(&m_val);
+    }
+
+    int32_t operator--()
+    {
+        return (int32_t)ATOMIC_DEC(&m_val);
+    }
+
+    int32_t fetchAdd(int32_t v)
+    {
+        return (int32_t)ATOMIC_ADD(&m_val, v);
+    }
+
+    int32_t fetchOr(int32_t mask)
+    {
+        return (int32_t)ATOMIC_OR(&m_val, mask);
+    }
+
+    int32_t fetchAnd(int32_t mask)
+    {
+        return (int32_t)ATOMIC_AND(&m_val, mask);
+    }
+
+private:
+    AtomicInt32(const AtomicInt32&);
+    AtomicInt32& operator=(const AtomicInt32&);
+    mutable volatile int32_t m_val;
+};
+
+class AtomicInt64
+{
+public:
+    AtomicInt64() : m_val(0) {}
+    AtomicInt64(int64_t v) : m_val(v) {}
+
+    operator int64_t() const
+    {
+        return (int64_t)ATOMIC64_LOAD(&m_val);
+    }
+
+    AtomicInt64& operator=(int64_t v)
+    {
+        ATOMIC64_STORE(&m_val, v);
+        return *this;
+    }
+
+    void add(int64_t v)
+    {
+        ATOMIC64_ADD(&m_val, v);
+    }
+
+private:
+    AtomicInt64(const AtomicInt64&);
+    AtomicInt64& operator=(const AtomicInt64&);
+    mutable volatile int64_t m_val;
+};
+
+class AtomicUInt32
+{
+public:
+    AtomicUInt32() : m_val(0) {}
+    AtomicUInt32(uint32_t v) : m_val(v) {}
+
+    operator uint32_t() const
+    {
+        return (uint32_t)ATOMIC_OR(&m_val, 0);
+    }
+
+    AtomicUInt32& operator=(uint32_t v)
+    {
+        ATOMIC_STORE(&m_val, (int32_t)v);
+        return *this;
+    }
+
+    uint32_t operator++()
+    {
+        return (uint32_t)ATOMIC_INC(&m_val);
+    }
+
+    uint32_t fetchAdd(uint32_t v)
+    {
+        return (uint32_t)ATOMIC_ADD(&m_val, (int32_t)v);
+    }
+
+private:
+    AtomicUInt32(const AtomicUInt32&);
+    AtomicUInt32& operator=(const AtomicUInt32&);
+    mutable volatile int32_t m_val;
 };
 
 //< Simplistic portable thread class.  Shutdown signalling left to derived class
