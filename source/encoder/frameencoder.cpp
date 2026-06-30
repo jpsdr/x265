@@ -1678,11 +1678,8 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             }
             if (bFirstRowInSlice && m_vbvResetTriggerRow[curRow.sliceId] != intRow)
             {
-                {
-                    ScopedLock lock(curEncData.m_rowStatLock);
-                    curEncData.m_rowStat[row].rowQp = curEncData.m_avgQpRc;
-                    curEncData.m_rowStat[row].rowQpScale = x265_qp2qScale(curEncData.m_avgQpRc);
-                }
+                curEncData.m_rowStat[row].rowQp = curEncData.m_avgQpRc;
+                curEncData.m_rowStat[row].rowQpScale = x265_qp2qScale(curEncData.m_avgQpRc);
             }
 
             FrameData::RCStatCU& cuStat = curEncData.m_cuStat[cuAddr];
@@ -1793,7 +1790,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
         }
 
         // Completed CU processing
-        ++curRow.completed;
+        curRow.completed++;
 
         FrameStats frameLog;
         curEncData.m_rowStat[row].sumQpAq += collectCTUStatistics(*ctu, &frameLog);
@@ -1908,11 +1905,8 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
                 double qpBase = curEncData.m_cuStat[cuAddr].baseQp;
                 curRow.reEncode = m_top->m_rateControl->rowVbvRateControl(m_frame[layer], row, &m_rce, qpBase, m_sliceBaseRow, sliceId);
                 qpBase = x265_clip3((double)m_param->rc.qpMin, (double)m_param->rc.qpMax, qpBase);
-                {
-                    ScopedLock lock(curEncData.m_rowStatLock);
-                    curEncData.m_rowStat[row].rowQp = qpBase;
-                    curEncData.m_rowStat[row].rowQpScale = x265_qp2qScale(qpBase);
-                }
+                curEncData.m_rowStat[row].rowQp = qpBase;
+                curEncData.m_rowStat[row].rowQpScale = x265_qp2qScale(qpBase);
                 if (curRow.reEncode < 0)
                 {
                     x265_log(m_param, X265_LOG_DEBUG, "POC %d row %d - encode restart required for VBV, to %.2f from %.2f\n",

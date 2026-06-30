@@ -825,6 +825,44 @@ protected:
     Lock &inst;
 };
 
+/* Lock-free spin lock using platform atomic ops (no CRITICAL_SECTION on Windows).
+ * TSan-friendly because acquire/release use the same ATOMIC_OR/ATOMIC_STORE
+ * intrinsics that TSan understands as synchronization points. */
+class SpinLock
+{
+public:
+    SpinLock() : m_val(0) {}
+    /* Copy-construct as a fresh unlocked instance — the lock state itself
+     * must never be copied (same semantics as std::mutex). */
+    SpinLock(const SpinLock&) : m_val(0) {}
+    SpinLock& operator=(const SpinLock&) { return *this; }
+
+    void acquire()
+    {
+        while (ATOMIC_OR(&m_val, 1) & 1)
+            GIVE_UP_TIME();
+    }
+
+    void release()
+    {
+        ATOMIC_STORE(&m_val, 0);
+    }
+
+private:
+    mutable volatile int32_t m_val;
+};
+
+class ScopedSpinLock
+{
+public:
+    ScopedSpinLock(SpinLock& instance) : inst(instance) { inst.acquire(); }
+    ~ScopedSpinLock() { inst.release(); }
+
+protected:
+    ScopedSpinLock& operator=(const ScopedSpinLock&);
+    SpinLock& inst;
+};
+
 // Utility class which adds elapsed time of the scope of the object into the
 // accumulator provided to the constructor
 struct ScopedElapsedTime
@@ -887,6 +925,7 @@ public:
     Atomic& operator=(T v)      { Ops::store(&m_val, (Storage)v); return *this; }
 
     T operator++()              { return (T)Ops::inc(&m_val); }
+    T operator++(int)           { return fetchAdd((T)1); }
     T operator--()              { return (T)Ops::dec(&m_val); }
     T fetchAdd(T v)             { return (T)Ops::add(&m_val, (Storage)v); }
     T fetchOr(T mask)           { return (T)Ops::fetchOr(&m_val, (Storage)mask); }
@@ -902,6 +941,40 @@ private:
 typedef Atomic<int32_t>  AtomicInt32;
 typedef Atomic<uint32_t> AtomicUInt32;
 typedef Atomic<int64_t>  AtomicInt64;
+
+/* Lock-free atomic double using int64_t storage with memcpy bit-casting.
+ * Needed because Atomic<T> casts through Storage (int64_t), which truncates
+ * floating-point values. This uses the same ATOMIC64_LOAD/STORE macros and
+ * works across all three platform backends (no-atomics, GCC, MSVC). */
+class AtomicDouble
+{
+public:
+    AtomicDouble() : m_val(0) {}
+    AtomicDouble(double v) { store(v); }
+
+    double load() const
+    {
+        int64_t bits = ATOMIC64_LOAD(&m_val);
+        double result;
+        memcpy(&result, &bits, sizeof(double));
+        return result;
+    }
+
+    void store(double v)
+    {
+        int64_t bits;
+        memcpy(&bits, &v, sizeof(double));
+        ATOMIC64_STORE(&m_val, bits);
+    }
+
+    operator double() const        { return load(); }
+    AtomicDouble& operator=(double v) { store(v); return *this; }
+
+private:
+    AtomicDouble(const AtomicDouble&);
+    AtomicDouble& operator=(const AtomicDouble&);
+    mutable volatile int64_t m_val;
+};
 
 /* Exclusive wrapper rather than an Atomic<bool> (as sizeof(bool) is not 4). */
 class AtomicBool

@@ -126,8 +126,6 @@ public:
     RPS*           m_spsrps;
     int            m_spsrpsIdx;
 
-    Lock m_rowStatLock;
-
     /* Rate control data used during encode and by references */
     struct RCStatCU
     {
@@ -147,8 +145,8 @@ public:
         uint32_t intraSatdForVbv; /* sum of lowres (estimated) intra costs for entire row */
         AtomicUInt32 rowSatd;
         AtomicUInt32 rowIntraSatd;
-        double   rowQp;
-        double   rowQpScale;
+        AtomicDouble rowQp;
+        AtomicDouble rowQpScale;
         double   sumQpRc;
         double   sumQpAq;
     };

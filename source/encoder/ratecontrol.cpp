@@ -433,7 +433,7 @@ void RateControl::initVBV(const SPS& sps)
         m_param->vbvEndFrameAdjust = x265_clip3(0.0, 1.0, m_param->vbvEndFrameAdjust);
     m_param->rc.vbvBufferInit = x265_clip3(0.0, 1.0, X265_MAX(m_param->rc.vbvBufferInit, m_bufferRate / m_bufferSize));
     m_bufferFillFinal = m_bufferSize * m_param->rc.vbvBufferInit;
-    m_bufferFillActual = m_bufferFillFinal;
+    m_bufferFillActual = double(m_bufferFillFinal);
     m_bufferExcess = 0;
     m_minBufferFill = m_param->minVbvFullness / 100;
     m_maxBufferFill = 1 - (m_param->maxVbvFullness / 100);
@@ -2820,10 +2820,7 @@ double RateControl::predictRowsSizeSum(Frame* curFrame, RateControlEntry* rce, d
                 }
 
                 refRowSatdCost >>= X265_DEPTH - 8;
-                {
-                    ScopedLock lock(refEncData.m_rowStatLock);
-                    refQScale = refEncData.m_rowStat[row].rowQpScale;
-                }
+                refQScale = refEncData.m_rowStat[row].rowQpScale;
             }
 
             if (picType == I_SLICE || qScale >= refQScale)
@@ -2922,11 +2919,8 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
 
         double wantedBits;
         double totalBits;
-        {
-            ScopedLock lock(m_rateControlLock);
-            wantedBits = m_wantedBitsWindow;
-            totalBits = (double)(int64_t)m_totalBits;
-        }
+        wantedBits = m_wantedBitsWindow;
+        totalBits = (double)(int64_t)m_totalBits;
         double totalBitsNeeded = wantedBits;
         if (m_param->totalFrames)
             totalBitsNeeded = (m_param->totalFrames * m_bitrate) / m_fps;
@@ -2944,11 +2938,7 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
             abrOvershoot = (accFrameBits + totalBits - wantedBits) / totalBitsNeeded;
         }
 
-        double row0Qp;
-        {
-            ScopedLock lock(curEncData.m_rowStatLock);
-            row0Qp = curEncData.m_rowStat[0].rowQp;
-        }
+        double row0Qp = curEncData.m_rowStat[0].rowQp;
         while (qpVbv > qpMin
                && (qpVbv > row0Qp || m_singleFrameVbv)
                && (((accFrameBits < rce->frameSizePlanned * 0.8f && qpVbv <= prevRowQp)
@@ -2988,10 +2978,7 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
             accFrameBits = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
         }
 
-        {
-            ScopedLock lock(rce->m_rateControlEntryLock);
-            rce->frameSizeEstimated = accFrameBits;
-        }
+        rce->frameSizeEstimated = accFrameBits;
         /* If the current row was large enough to cause a large QP jump, try re-encoding it. */
         if (qpVbv > qpMax && prevRowQp < qpMax && canReencodeRow)
         {
@@ -3012,10 +2999,7 @@ int RateControl::rowVbvRateControl(Frame* curFrame, uint32_t row, RateControlEnt
     else
     {
         int32_t encodedBitsSoFar = 0;
-        {
-            ScopedLock lock(rce->m_rateControlEntryLock);
-            rce->frameSizeEstimated = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
-        }
+        rce->frameSizeEstimated = predictRowsSizeSum(curFrame, rce, qpVbv, encodedBitsSoFar);
 
         /* Last-ditch attempt: if the last row of the frame underflowed the VBV,
          * try again. */
@@ -3088,13 +3072,13 @@ int RateControl::updateVbv(int64_t bits, RateControlEntry* rce)
     if (!m_isVbv)
         return 0;
 
-    m_bufferFillFinal -= bits;
+    m_bufferFillFinal = double(m_bufferFillFinal) - bits;
 
     if (m_bufferFillFinal < 0)
-        x265_log(m_param, X265_LOG_WARNING, "poc:%d, VBV underflow (%.0f bits)\n", rce->poc, m_bufferFillFinal);
+        x265_log(m_param, X265_LOG_WARNING, "poc:%d, VBV underflow (%.0f bits)\n", rce->poc, (double)m_bufferFillFinal);
 
-    m_bufferFillFinal = X265_MAX(m_bufferFillFinal, 0);
-    m_bufferFillFinal += rce->bufferRate;
+    m_bufferFillFinal = X265_MAX(double(m_bufferFillFinal), 0.0);
+    m_bufferFillFinal = double(m_bufferFillFinal) + rce->bufferRate;
     if (m_param->csvLogLevel >= 2)
         m_unclippedBufferFillFinal = m_bufferFillFinal;
 
@@ -3105,18 +3089,18 @@ int RateControl::updateVbv(int64_t bits, RateControlEntry* rce)
             filler = (int)(m_bufferFillFinal - m_bufferSize);
             filler += FILLER_OVERHEAD * 8;
         }
-        m_bufferFillFinal -= filler;
+        m_bufferFillFinal = double(m_bufferFillFinal) - filler;
         bufferBits = X265_MIN(bits + filler + m_bufferExcess, rce->bufferRate);
         m_bufferExcess = X265_MAX(m_bufferExcess - bufferBits + bits + filler, 0);
-        m_bufferFillActual += bufferBits - bits - filler;
+        m_bufferFillActual = double(m_bufferFillActual) + bufferBits - bits - filler;
     }
     else
     {
-        m_bufferFillFinal = X265_MIN(m_bufferFillFinal, m_bufferSize);
+        m_bufferFillFinal = X265_MIN(double(m_bufferFillFinal), m_bufferSize);
         bufferBits = X265_MIN(bits + m_bufferExcess, rce->bufferRate);
         m_bufferExcess = X265_MAX(m_bufferExcess - bufferBits + bits, 0);
-        m_bufferFillActual += bufferBits - bits;
-        m_bufferFillActual = X265_MIN(m_bufferFillActual, m_bufferSize);
+        m_bufferFillActual = double(m_bufferFillActual) + bufferBits - bits;
+        m_bufferFillActual = X265_MIN(double(m_bufferFillActual), m_bufferSize);
     }
     return filler;
 }
@@ -3137,7 +3121,7 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
         orderValue = m_startEndOrder.waitForChange(orderValue);
     }
 
-    ScopedLock lock(m_rateControlLock);
+    ScopedSpinLock lock(m_rateControlLock);
     FrameData& curEncData = *curFrame->m_encData;
     int64_t actualBits = bits;
     Slice *slice = curEncData.m_slice;
@@ -3241,7 +3225,7 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
                 * Not perfectly accurate with B-refs, but good enough. */
             m_cplxrSum += (bits * x265_qp2qScale(rce->qpaRc) / (rce->qRceq * fabs(m_param->rc.pbFactor))) - (rce->rowCplxrSum);
         }
-        m_wantedBitsWindow += m_frameDuration * (m_bRcReConfig ? (curFrame->m_targetBitrate * 1000) : m_bitrate);
+        m_wantedBitsWindow = double(m_wantedBitsWindow) + m_frameDuration * (m_bRcReConfig ? (curFrame->m_targetBitrate * 1000) : m_bitrate);
         m_totalBits.add(bits - rce->rowTotalBits);
         m_encodedBits += actualBits;
         m_encodedSegmentBits += actualBits;
