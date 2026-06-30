@@ -60,8 +60,8 @@ public:
     ThreadPool*   m_pool;
     sleepbitmap_t m_ownerBitmap;
     int           m_jpId;
-    ThreadSafeInteger           m_sliceType;
-    AtomicInt32          m_helpWanted;
+    ThreadSafeInteger m_sliceType;
+    AtomicInt32   m_helpWanted;
     bool          m_isFrameEncoder; /* rather ugly hack, but nothing better presents itself */
 
     JobProvider()

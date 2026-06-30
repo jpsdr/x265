@@ -848,6 +848,62 @@ protected:
  * Declaring a variable as AtomicBool/AtomicInt32/AtomicInt64 makes it
  * impossible to access it non-atomically by accident. */
 
+/* Generic abstraction for atomic operations on integers of various sizes (4 vs 8 bytes). */
+template<int N> struct AtomicOps;
+
+template<> struct AtomicOps<4>
+{
+    typedef int32_t Storage;
+    static int32_t load(volatile Storage* p)              { return (int32_t)ATOMIC_OR(p, 0); }
+    static void    store(volatile Storage* p, int32_t v)  { ATOMIC_STORE(p, v); }
+    static int32_t inc(volatile Storage* p)               { return (int32_t)ATOMIC_INC(p); }
+    static int32_t dec(volatile Storage* p)               { return (int32_t)ATOMIC_DEC(p); }
+    static int32_t add(volatile Storage* p, int32_t v)    { return (int32_t)ATOMIC_ADD(p, v); }
+    static int32_t fetchOr(volatile Storage* p, int32_t m){ return (int32_t)ATOMIC_OR(p, m); }
+    static int32_t fetchAnd(volatile Storage* p, int32_t m){ return (int32_t)ATOMIC_AND(p, m); }
+};
+
+template<> struct AtomicOps<8>
+{
+    typedef int64_t Storage;
+    static int64_t load(volatile Storage* p)              { return (int64_t)ATOMIC64_LOAD(p); }
+    static void    store(volatile Storage* p, int64_t v)  { ATOMIC64_STORE(p, v); }
+    static int64_t add(volatile Storage* p, int64_t v)    { return (int64_t)ATOMIC64_ADD(p, v); }
+};
+
+/* Generic atomic integer */
+template<typename T>
+class Atomic
+{
+    typedef AtomicOps<sizeof(T)> Ops;
+    typedef typename Ops::Storage Storage;
+
+public:
+    Atomic() : m_val(0) {}
+    Atomic(T v) : m_val((Storage)v) {}
+
+    operator T() const          { return (T)Ops::load(&m_val); }
+
+    Atomic& operator=(T v)      { Ops::store(&m_val, (Storage)v); return *this; }
+
+    T operator++()              { return (T)Ops::inc(&m_val); }
+    T operator--()              { return (T)Ops::dec(&m_val); }
+    T fetchAdd(T v)             { return (T)Ops::add(&m_val, (Storage)v); }
+    T fetchOr(T mask)           { return (T)Ops::fetchOr(&m_val, (Storage)mask); }
+    T fetchAnd(T mask)          { return (T)Ops::fetchAnd(&m_val, (Storage)mask); }
+    void add(T v)               { Ops::add(&m_val, (Storage)v); }
+
+private:
+    Atomic(const Atomic&);
+    Atomic& operator=(const Atomic&);
+    mutable volatile Storage m_val;
+};
+
+typedef Atomic<int32_t>  AtomicInt32;
+typedef Atomic<uint32_t> AtomicUInt32;
+typedef Atomic<int64_t>  AtomicInt64;
+
+/* Exclusive wrapper rather than an Atomic<bool> (as sizeof(bool) is not 4). */
 class AtomicBool
 {
 public:
@@ -868,115 +924,6 @@ public:
 private:
     AtomicBool(const AtomicBool&);
     AtomicBool& operator=(const AtomicBool&);
-    mutable volatile int32_t m_val;
-};
-
-class AtomicInt32
-{
-public:
-    AtomicInt32() : m_val(0) {}
-    AtomicInt32(int32_t v) : m_val(v) {}
-
-    operator int32_t() const
-    {
-        return (int32_t)ATOMIC_OR(&m_val, 0);
-    }
-
-    AtomicInt32& operator=(int32_t v)
-    {
-        ATOMIC_STORE(&m_val, v);
-        return *this;
-    }
-
-    int32_t operator++()
-    {
-        return (int32_t)ATOMIC_INC(&m_val);
-    }
-
-    int32_t operator--()
-    {
-        return (int32_t)ATOMIC_DEC(&m_val);
-    }
-
-    int32_t fetchAdd(int32_t v)
-    {
-        return (int32_t)ATOMIC_ADD(&m_val, v);
-    }
-
-    int32_t fetchOr(int32_t mask)
-    {
-        return (int32_t)ATOMIC_OR(&m_val, mask);
-    }
-
-    int32_t fetchAnd(int32_t mask)
-    {
-        return (int32_t)ATOMIC_AND(&m_val, mask);
-    }
-
-private:
-    AtomicInt32(const AtomicInt32&);
-    AtomicInt32& operator=(const AtomicInt32&);
-    mutable volatile int32_t m_val;
-};
-
-class AtomicInt64
-{
-public:
-    AtomicInt64() : m_val(0) {}
-    AtomicInt64(int64_t v) : m_val(v) {}
-
-    operator int64_t() const
-    {
-        return (int64_t)ATOMIC64_LOAD(&m_val);
-    }
-
-    AtomicInt64& operator=(int64_t v)
-    {
-        ATOMIC64_STORE(&m_val, v);
-        return *this;
-    }
-
-    void add(int64_t v)
-    {
-        ATOMIC64_ADD(&m_val, v);
-    }
-
-private:
-    AtomicInt64(const AtomicInt64&);
-    AtomicInt64& operator=(const AtomicInt64&);
-    mutable volatile int64_t m_val;
-};
-
-class AtomicUInt32
-{
-public:
-    AtomicUInt32() : m_val(0) {}
-    AtomicUInt32(uint32_t v) : m_val(v) {}
-
-    operator uint32_t() const
-    {
-        return (uint32_t)ATOMIC_OR(&m_val, 0);
-    }
-
-    AtomicUInt32& operator=(uint32_t v)
-    {
-        ATOMIC_STORE(&m_val, (int32_t)v);
-        return *this;
-    }
-
-    uint32_t operator++()
-    {
-        return (uint32_t)ATOMIC_INC(&m_val);
-    }
-
-    uint32_t fetchAdd(uint32_t v)
-    {
-        return (uint32_t)ATOMIC_ADD(&m_val, (int32_t)v);
-    }
-
-private:
-    AtomicUInt32(const AtomicUInt32&);
-    AtomicUInt32& operator=(const AtomicUInt32&);
     mutable volatile int32_t m_val;
 };
 

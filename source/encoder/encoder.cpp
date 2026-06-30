@@ -636,9 +636,6 @@ void Encoder::stopJobs()
     if (m_lookahead)
         m_lookahead->stopJobs();
 
-    if (m_threadedME)
-        m_threadedME->stopJobs();
-
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
         if (m_frameEncoder[i])
@@ -649,6 +646,9 @@ void Encoder::stopJobs()
             m_frameEncoder[i]->stop();
         }
     }
+
+    if (m_threadedME)
+        m_threadedME->stopJobs();
 
     if (m_threadPool)
     {

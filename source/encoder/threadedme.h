@@ -167,7 +167,7 @@ public:
     Lock                    m_taskQueueLock;
     Event                   m_taskEvent;
 
-    volatile bool           m_active;
+    AtomicBool              m_active;       /* accessed lock-free across threads; use ATOMIC_LOAD/ATOMIC_STORE */
     unsigned long long      m_enqueueSeq;
 
     ThreadLocalData*        m_tld;
