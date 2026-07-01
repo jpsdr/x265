@@ -461,6 +461,7 @@ uint32_t cpu_detect(bool benableavx512)
 
 uint32_t cpu_detect( bool benableavx512 )
 {
+    (void)benableavx512;
     uint32_t flags = 0;
 
 #ifdef ENABLE_ASSEMBLY

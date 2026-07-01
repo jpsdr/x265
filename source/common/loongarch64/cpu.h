@@ -28,12 +28,14 @@
 
 #if LOONGARCH64_RUNTIME_CPU_DETECT
 
+#if HAVE_GETAUXVAL
+
 #include <sys/auxv.h>
 
 #define LA_HWCAP_LSX    ( 1U << 4 )
 #define LA_HWCAP_LASX   ( 1U << 5 )
 
-static inline uint32_t loongarch64_cpu_detect()
+static inline uint32_t loongarch64_get_cpu_flags()
 {
     uint32_t flags = 0;
 #if HAVE_LSX || HAVE_LSX
@@ -48,6 +50,20 @@ static inline uint32_t loongarch64_cpu_detect()
     if( hwcap & LA_HWCAP_LASX )
         flags |= X265_CPU_LASX;
 #endif
+
+    return flags;
+}
+
+#else // HAVE_GETAUXVAL
+#error                                                                 \
+    "Run-time CPU feature detection selected, but no detection method" \
+    "available for your platform. Rerun cmake configure with"          \
+    "-DLOONGARCH64_RUNTIME_CPU_DETECT=OFF."
+#endif // HAVE_GETAUXVAL
+
+static inline uint32_t loongarch64_cpu_detect()
+{
+    uint32_t flags = loongarch64_get_cpu_flags();
 
     return flags;
 }
