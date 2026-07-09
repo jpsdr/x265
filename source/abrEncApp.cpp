@@ -35,10 +35,10 @@
 using namespace X265_NS;
 
 /* Ctrl-C handler */
-static volatile sig_atomic_t b_ctrl_c /* = 0 */;
+static AtomicBool b_ctrl_c /* = 0 */;
 static void sigint_handler(int)
 {
-    b_ctrl_c = 1;
+    b_ctrl_c = true;
 }
 
 namespace X265_NS {
@@ -815,7 +815,7 @@ ret:
 
                     if (numEncoded < 0)
                     {
-                        b_ctrl_c = 1;
+                        b_ctrl_c = true;
                         m_ret = 4;
                         break;
                     }

@@ -77,7 +77,7 @@ struct CTURow
 {
     Entropy           bufferedEntropy;  /* store CTU2 context for next row CTU0 */
     Entropy           rowGoOnCoder;     /* store context between CTUs, code bitstream if !SAO */
-    unsigned int      sliceId;          /* store current row slice id */
+    AtomicUInt32      sliceId;          /* store current row slice id */
 
     FrameStats        rowStats;
 

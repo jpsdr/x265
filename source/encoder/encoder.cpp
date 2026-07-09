@@ -1902,6 +1902,20 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
         if (m_reconfigureRc || m_param->bConfigRCFrame)
             inFrame[0]->m_reconfigureRc = true;
 
+        /* Extend chroma borders unconditionally, before this frame can be
+         * referenced by any other frame encoder thread. This replaces the
+         * lazy, flag-guarded extension that used to happen inside
+         * weightAnalyse(), which raced with compressCTU() reading the same
+         * buffer on another thread with no synchronization between them. */
+        if (m_param->internalCsp != X265_CSP_I400)
+        {
+            PicYuv *orig = inFrame[0]->m_fencPic;
+            int width  = orig->m_picWidth  >> orig->m_hChromaShift;
+            int height = orig->m_picHeight >> orig->m_vChromaShift;
+            extendPicBorder(orig->m_picOrg[1], orig->m_strideC, width, height, orig->m_chromaMarginX, orig->m_chromaMarginY);
+            extendPicBorder(orig->m_picOrg[2], orig->m_strideC, width, height, orig->m_chromaMarginX, orig->m_chromaMarginY);
+        }
+
         if (m_param->bEnableTemporalFilter)
         {
             if (!m_pocLast)
@@ -1945,11 +1959,9 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             if (m_param->totalFrames && (inFrame[0]->m_poc >= (m_param->totalFrames - inFrame[0]->m_mcstf->m_range)))
                 inFrame[0]->m_refPicCnt[1] -= (uint8_t)(inFrame[0]->m_poc + inFrame[0]->m_mcstf->m_range - m_param->totalFrames + 1);
 
-            //Extend full-res original picture border
+            //Extend full-res original picture luma border (chroma already extended above)
             PicYuv *orig = inFrame[0]->m_fencPic;
             extendPicBorder(orig->m_picOrg[0], orig->m_stride, orig->m_picWidth, orig->m_picHeight, orig->m_lumaMarginX, orig->m_lumaMarginY);
-            extendPicBorder(orig->m_picOrg[1], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
-            extendPicBorder(orig->m_picOrg[2], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
 
             //TODO: Add subsampling here if required
             inFrame[0]->m_mcstffencPic->copyFromFrame(inFrame[0]->m_fencPic);

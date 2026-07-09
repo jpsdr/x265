@@ -325,22 +325,10 @@ void weightAnalyse(Slice& slice, Frame& frame, x265_param& param)
                 mvs = fenc.lowresMvs[list][diffPoc];
 
                 /* test whether this motion search was performed by lookahead */
-                if (mvs[0].x != 0x7FFF)
-                {
-                    /* reference chroma planes must be extended prior to being
-                     * used as motion compensation sources */
-                    if (!refFrame->m_bChromaExtended && param.internalCsp != X265_CSP_I400 && frame.m_fencPic->m_picCsp != X265_CSP_I400)
-                    {
-                        refFrame->m_bChromaExtended = true;
-                        PicYuv *refPic = refFrame->m_fencPic;
-                        int width = refPic->m_picWidth >> cache.hshift;
-                        int height = refPic->m_picHeight >> cache.vshift;
-                        extendPicBorder(refPic->m_picOrg[1], refPic->m_strideC, width, height, refPic->m_chromaMarginX, refPic->m_chromaMarginY);
-                        extendPicBorder(refPic->m_picOrg[2], refPic->m_strideC, width, height, refPic->m_chromaMarginX, refPic->m_chromaMarginY);
-                    }
-                }
-                else
+                if (mvs[0].x == 0x7FFF)
                     mvs = 0;
+                /* chroma borders are extended unconditionally at frame-input
+                 * time in Encoder::encode(); no lazy extension needed here */
             }
 
             /* prepare inputs to weight analysis */
