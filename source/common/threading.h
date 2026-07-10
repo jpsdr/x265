@@ -63,13 +63,13 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
 #define BSF(id, x)            (id) = ((unsigned long)__builtin_ctz(x))
 #define BSR64(id, x)          (id) = ((unsigned long)__builtin_clzll(x) ^ 63)
 #define BSF64(id, x)          (id) = ((unsigned long)__builtin_ctzll(x))
-#define ATOMIC_OR(ptr, mask)  no_atomic_or((int*)ptr, mask)
-#define ATOMIC_AND(ptr, mask) no_atomic_and((int*)ptr, mask)
-#define ATOMIC_INC(ptr)       no_atomic_inc((int*)ptr)
-#define ATOMIC_DEC(ptr)       no_atomic_dec((int*)ptr)
+#define ATOMIC_OR(ptr, mask)  no_atomic_or(const_cast<int*>(reinterpret_cast<volatile int*>(ptr)), mask)
+#define ATOMIC_AND(ptr, mask) no_atomic_and(const_cast<int*>(reinterpret_cast<volatile int*>(ptr)), mask)
+#define ATOMIC_INC(ptr)       no_atomic_inc(const_cast<int*>(reinterpret_cast<volatile int*>(ptr)))
+#define ATOMIC_DEC(ptr)       no_atomic_dec(const_cast<int*>(reinterpret_cast<volatile int*>(ptr)))
 #define ATOMIC_ADD(ptr, val)  (sizeof(*(ptr)) == 8 ? \
-                               no_atomic_add64((int64_t*)ptr, (int64_t)(val)) : \
-                               no_atomic_add((int*)ptr, (int)(val)))
+                               no_atomic_add64(const_cast<int64_t*>(reinterpret_cast<volatile int64_t*>(ptr)), (int64_t)(val)) : \
+                               no_atomic_add(const_cast<int*>(reinterpret_cast<volatile int*>(ptr)), (int)(val)))
 #define ATOMIC_STORE(ptr, val)    (*(ptr) = (int)(val))
 #define ATOMIC64_LOAD(ptr)        (*(ptr))
 #define ATOMIC64_STORE(ptr, val)  (*(ptr) = (val))
@@ -87,13 +87,13 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
 #define BSF64(id, x)          (id) = ((unsigned long)__builtin_ctzll(x))
 #define ATOMIC_OR(ptr, mask)  __sync_fetch_and_or(ptr, mask)
 #define ATOMIC_AND(ptr, mask) __sync_fetch_and_and(ptr, mask)
-#define ATOMIC_INC(ptr)       __sync_add_and_fetch((volatile int32_t*)ptr, 1)
-#define ATOMIC_DEC(ptr)       __sync_add_and_fetch((volatile int32_t*)ptr, -1)
-#define ATOMIC_ADD(ptr, val)  __sync_fetch_and_add((volatile __typeof__(*(ptr))*)ptr, (__typeof__(*(ptr) + 0))(val))
-#define ATOMIC_STORE(ptr, val)    __sync_lock_test_and_set((volatile int32_t*)ptr, (int32_t)(val))
-#define ATOMIC64_LOAD(ptr)        __sync_fetch_and_add((volatile int64_t*)ptr, 0)
-#define ATOMIC64_STORE(ptr, val)  __sync_lock_test_and_set((volatile int64_t*)ptr, val)
-#define ATOMIC64_ADD(ptr, val)    __sync_fetch_and_add((volatile int64_t*)ptr, val)
+#define ATOMIC_INC(ptr)       __sync_add_and_fetch(reinterpret_cast<volatile int32_t*>(ptr), 1)
+#define ATOMIC_DEC(ptr)       __sync_add_and_fetch(reinterpret_cast<volatile int32_t*>(ptr), -1)
+#define ATOMIC_ADD(ptr, val)  __sync_fetch_and_add(reinterpret_cast<volatile __typeof__(*(ptr))*>(ptr), (__typeof__(*(ptr) + 0))(val))
+#define ATOMIC_STORE(ptr, val)    __sync_lock_test_and_set(reinterpret_cast<volatile int32_t*>(ptr), (int32_t)(val))
+#define ATOMIC64_LOAD(ptr)        __sync_fetch_and_add(reinterpret_cast<volatile int64_t*>(ptr), 0)
+#define ATOMIC64_STORE(ptr, val)  __sync_lock_test_and_set(reinterpret_cast<volatile int64_t*>(ptr), val)
+#define ATOMIC64_ADD(ptr, val)    __sync_fetch_and_add(reinterpret_cast<volatile int64_t*>(ptr), val)
 #define GIVE_UP_TIME()        usleep(0)
 
 #elif defined(_MSC_VER)       /* Windows atomic intrinsics */
@@ -104,17 +104,17 @@ int64_t no_atomic_add64(int64_t* ptr, int64_t val);
 #define BSF(id, x)            _BitScanForward(&id, x)
 #define BSR64(id, x)          _BitScanReverse64(&id, x)
 #define BSF64(id, x)          _BitScanForward64(&id, x)
-#define ATOMIC_INC(ptr)       InterlockedIncrement((volatile LONG*)ptr)
-#define ATOMIC_DEC(ptr)       InterlockedDecrement((volatile LONG*)ptr)
+#define ATOMIC_INC(ptr)       InterlockedIncrement(reinterpret_cast<volatile LONG*>(ptr))
+#define ATOMIC_DEC(ptr)       InterlockedDecrement(reinterpret_cast<volatile LONG*>(ptr))
 #define ATOMIC_ADD(ptr, val)  (sizeof(*(ptr)) == 8 ? \
-                               InterlockedExchangeAdd64((volatile LONGLONG*)ptr, (LONGLONG)(val)) : \
-                               InterlockedExchangeAdd((volatile LONG*)ptr, (LONG)(val)))
-#define ATOMIC_OR(ptr, mask)  _InterlockedOr((volatile LONG*)ptr, (LONG)mask)
-#define ATOMIC_AND(ptr, mask) _InterlockedAnd((volatile LONG*)ptr, (LONG)mask)
-#define ATOMIC_STORE(ptr, val)    InterlockedExchange((volatile LONG*)ptr, (LONG)(val))
-#define ATOMIC64_LOAD(ptr)        InterlockedAdd64((volatile LONG64*)ptr, 0)
-#define ATOMIC64_STORE(ptr, val)  InterlockedExchange64((volatile LONG64*)ptr, val)
-#define ATOMIC64_ADD(ptr, val)    InterlockedAdd64((volatile LONG64*)ptr, val)
+                               InterlockedExchangeAdd64(reinterpret_cast<volatile LONGLONG*>(ptr), (LONGLONG)(val)) : \
+                               InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(ptr), (LONG)(val)))
+#define ATOMIC_OR(ptr, mask)  _InterlockedOr(reinterpret_cast<volatile LONG*>(ptr), static_cast<LONG>(mask))
+#define ATOMIC_AND(ptr, mask) _InterlockedAnd(reinterpret_cast<volatile LONG*>(ptr), static_cast<LONG>(mask))
+#define ATOMIC_STORE(ptr, val)    InterlockedExchange(reinterpret_cast<volatile LONG*>(ptr), (LONG)(val))
+#define ATOMIC64_LOAD(ptr)        InterlockedAdd64(reinterpret_cast<volatile LONG64*>(ptr), 0)
+#define ATOMIC64_STORE(ptr, val)  InterlockedExchange64(reinterpret_cast<volatile LONG64*>(ptr), val)
+#define ATOMIC64_ADD(ptr, val)    InterlockedAdd64(reinterpret_cast<volatile LONG64*>(ptr), val)
 #define GIVE_UP_TIME()        Sleep(0)
 
 #endif // ifdef __GNUC__
@@ -835,6 +835,10 @@ public:
     /* Copy-construct as a fresh unlocked instance — the lock state itself
      * must never be copied (same semantics as std::mutex). */
     SpinLock(const SpinLock&) : m_val(0) {}
+    /* Intentionally does not touch m_val: copying another instance's lock
+     * state into this one would be a real bug, not the omission cppcheck
+     * suspects (see class comment above). */
+    // cppcheck-suppress operatorEqVarError
     SpinLock& operator=(const SpinLock&) { return *this; }
 
     void acquire()
@@ -855,7 +859,7 @@ private:
 class ScopedSpinLock
 {
 public:
-    ScopedSpinLock(SpinLock& instance) : inst(instance) { inst.acquire(); }
+    explicit ScopedSpinLock(SpinLock& instance) : inst(instance) { inst.acquire(); }
     ~ScopedSpinLock() { inst.release(); }
 
 protected:
@@ -918,7 +922,7 @@ class Atomic
 
 public:
     Atomic() : m_val(0) {}
-    Atomic(T v) : m_val((Storage)v) {}
+    explicit Atomic(T v) : m_val((Storage)v) {}
 
     operator T() const          { return (T)Ops::load(&m_val); }
 
@@ -950,7 +954,7 @@ class AtomicDouble
 {
 public:
     AtomicDouble() : m_val(0) {}
-    AtomicDouble(double v) { store(v); }
+    explicit AtomicDouble(double v) : m_val(0) { store(v); }
 
     double load() const
     {
@@ -981,7 +985,7 @@ class AtomicBool
 {
 public:
     AtomicBool() : m_val(0) {}
-    AtomicBool(bool v) : m_val(v ? 1 : 0) {}
+    explicit AtomicBool(bool v) : m_val(v ? 1 : 0) {}
 
     operator bool() const
     {

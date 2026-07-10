@@ -275,7 +275,7 @@ public:
     void     setQPSubParts(int8_t qp, uint32_t absPartIdx, uint32_t depth)
     {
         ScopedSpinLock lock(m_accessLock);
-        s_partSet[depth]((uint8_t*)m_qp + absPartIdx, (uint8_t)qp);
+        s_partSet[depth](reinterpret_cast<uint8_t*>(m_qp) + absPartIdx, (uint8_t)qp);
     }
     void     setTUDepthSubParts(uint8_t tuDepth, uint32_t absPartIdx, uint32_t depth)         { s_partSet[depth](m_tuDepth + absPartIdx, tuDepth); }
     void     setLumaIntraDirSubParts(uint8_t dir, uint32_t absPartIdx, uint32_t depth)        { s_partSet[depth](m_lumaIntraDir + absPartIdx, dir); }

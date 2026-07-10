@@ -39,7 +39,8 @@ typedef uint64_t sleepbitmap_t;
 #ifdef __GNUC__
 #define SLEEPBITMAP_LOAD(ptr) __sync_fetch_and_or(ptr, 0)
 #elif defined(_MSC_VER)
-#define SLEEPBITMAP_LOAD(ptr) InterlockedOr64((volatile LONG64*)ptr, 0)
+/* LONG64 vs. uint64_t signedness mismatch is intentional: InterlockedOr64 only needs the bit pattern */
+#define SLEEPBITMAP_LOAD(ptr) InterlockedOr64(reinterpret_cast<volatile LONG64*>(ptr), 0)
 #endif
 #else
 typedef uint32_t sleepbitmap_t;
