@@ -164,12 +164,11 @@ void ThreadedME::findJob(int workerThreadId)
     m_taskQueueLock.acquire();
     if (m_taskQueue.empty())
     {
-        m_helpWanted = false;
         m_taskQueueLock.release();
+        m_helpWanted = true;
         return;
     }
-    
-    m_helpWanted = true;
+
     int64_t stime = x265_mdate();
 
 #ifdef DETAILED_CU_STATS
@@ -179,6 +178,7 @@ void ThreadedME::findJob(int workerThreadId)
 
     CTUTask task = m_taskQueue.top();
     m_taskQueue.pop();
+    m_helpWanted = !m_taskQueue.empty();
     m_taskQueueLock.release();
 
     int numCols = (m_param->sourceWidth + m_param->maxCUSize - 1) / m_param->maxCUSize;
@@ -218,8 +218,9 @@ void ThreadedME::findJob(int workerThreadId)
 
 void ThreadedME::stopJobs()
 {
-    this->m_active = false;
+    m_active = false;
     m_taskEvent.trigger();
+    stop();
 }
 
 void ThreadedME::destroy()

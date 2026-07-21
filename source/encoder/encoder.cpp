@@ -40,6 +40,7 @@
 #include "dpb.h"
 #include "nal.h"
 #include "threadedme.h"
+#include "ratecontrol.h"
 
 #include "x265.h"
 
@@ -635,9 +636,6 @@ void Encoder::stopJobs()
     if (m_lookahead)
         m_lookahead->stopJobs();
 
-    if (m_threadedME)
-        m_threadedME->stopJobs();
-
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
         if (m_frameEncoder[i])
@@ -648,6 +646,9 @@ void Encoder::stopJobs()
             m_frameEncoder[i]->stop();
         }
     }
+
+    if (m_threadedME)
+        m_threadedME->stopJobs();
 
     if (m_threadPool)
     {
@@ -1053,7 +1054,9 @@ void Encoder::updateVbvPlan(RateControl* rc)
         FrameEncoder *encoder = m_frameEncoder[i];
         if (encoder->m_rce.isActive && encoder->m_rce.poc != rc->m_curSlice->m_poc)
         {
-            int64_t bits = m_param->rc.bEnableConstVbv ? (int64_t)encoder->m_rce.frameSizePlanned : (int64_t)X265_MAX(encoder->m_rce.frameSizeEstimated, encoder->m_rce.frameSizePlanned);
+            double frameSizeEst = encoder->m_rce.frameSizeEstimated;
+            double frameSizePlan = encoder->m_rce.frameSizePlanned;
+            int64_t bits = m_param->rc.bEnableConstVbv ? (int64_t)frameSizePlan : (int64_t)X265_MAX(frameSizeEst, frameSizePlan);
             rc->m_bufferFill -= bits;
             rc->m_bufferFill = X265_MAX(rc->m_bufferFill, 0);
             rc->m_bufferFill += encoder->m_rce.bufferRate;
@@ -1899,6 +1902,20 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
         if (m_reconfigureRc || m_param->bConfigRCFrame)
             inFrame[0]->m_reconfigureRc = true;
 
+        /* Extend chroma borders unconditionally, before this frame can be
+         * referenced by any other frame encoder thread. This replaces the
+         * lazy, flag-guarded extension that used to happen inside
+         * weightAnalyse(), which raced with compressCTU() reading the same
+         * buffer on another thread with no synchronization between them. */
+        if (m_param->internalCsp != X265_CSP_I400)
+        {
+            PicYuv *orig = inFrame[0]->m_fencPic;
+            int width  = orig->m_picWidth  >> orig->m_hChromaShift;
+            int height = orig->m_picHeight >> orig->m_vChromaShift;
+            extendPicBorder(orig->m_picOrg[1], orig->m_strideC, width, height, orig->m_chromaMarginX, orig->m_chromaMarginY);
+            extendPicBorder(orig->m_picOrg[2], orig->m_strideC, width, height, orig->m_chromaMarginX, orig->m_chromaMarginY);
+        }
+
         if (m_param->bEnableTemporalFilter)
         {
             if (!m_pocLast)
@@ -1942,11 +1959,9 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             if (m_param->totalFrames && (inFrame[0]->m_poc >= (m_param->totalFrames - inFrame[0]->m_mcstf->m_range)))
                 inFrame[0]->m_refPicCnt[1] -= (uint8_t)(inFrame[0]->m_poc + inFrame[0]->m_mcstf->m_range - m_param->totalFrames + 1);
 
-            //Extend full-res original picture border
+            //Extend full-res original picture luma border (chroma already extended above)
             PicYuv *orig = inFrame[0]->m_fencPic;
             extendPicBorder(orig->m_picOrg[0], orig->m_stride, orig->m_picWidth, orig->m_picHeight, orig->m_lumaMarginX, orig->m_lumaMarginY);
-            extendPicBorder(orig->m_picOrg[1], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
-            extendPicBorder(orig->m_picOrg[2], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
 
             //TODO: Add subsampling here if required
             inFrame[0]->m_mcstffencPic->copyFromFrame(inFrame[0]->m_fencPic);

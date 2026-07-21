@@ -28,6 +28,7 @@
 #include "common.h"
 #include "picyuv.h"
 #include "mv.h"
+#include "threading.h"
 
 namespace X265_NS {
 // private namespace
@@ -51,7 +52,7 @@ struct ReferencePlanes
     /* Edge Plane in Lowres */
     pixel* lowresEdgePlane;
 
-    bool     isWeighted;
+    AtomicBool     isWeighted;
     bool     isLowres;
     bool     isHMELowres;
 
