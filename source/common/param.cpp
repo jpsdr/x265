@@ -439,14 +439,12 @@ void x265_param_default(x265_param* param)
 
     /* MCSTF */
     param->bEnableTemporalFilter = 0;
-    param->temporalFilterStrength = 0.95;
-    param->searchRangeForLayer0 = 3;
-    param->searchRangeForLayer1 = 3;
-    param->searchRangeForLayer2 = 3;
+    param->bSelectiveMCSTF = 0;
 
     /* Threaded ME */
     param->tmeTaskBlockSize = 1;
     param->tmeNumBufferRows = 10;
+    param->tmeNumThreads = 0;
 
     /*Alpha Channel Encoding*/
     param->bEnableAlpha = 0;
@@ -471,6 +469,14 @@ void x265_param_default(x265_param* param)
     param->bEnableSCC = 0;
 
     param->bConfigRCFrame = 0;
+
+    /* Foveated encoding - all disabled by default; encoder is bit-for-bit
+     * identical to upstream when foveaDelta == 0 */
+    param->foveaGazeX    = -1.0f;  /* -1 = use frame center */
+    param->foveaGazeY    = -1.0f;
+    param->foveaDelta    = 0.0f;   /* 0 = foveation disabled */
+    param->foveaSigma    = 0.0f;   /* 0 = auto (95px) */
+    param->foveaGazeFile = NULL;
 }
 
 int x265_param_default_preset(x265_param* param, const char* preset, const char* tune)
@@ -918,6 +924,22 @@ int x265_zone_param_parse(x265_param* p, const char* name, const char* value)
     OPT("tskip-fast") p->bEnableTSkipFast = atobool(value);
     OPT("rdpenalty") p->rdPenalty = atoi(value);
     OPT("dynamic-rd") p->dynamicRd = atof(value);
+    /* Foveated encoding parameters */
+    OPT("fovea-gaze")
+    {
+        /* Expects "x,y" format, e.g. "960,540" */
+        float x = 0.0f, y = 0.0f;
+        if (sscanf(value, "%f,%f", &x, &y) == 2)
+        {
+            p->foveaGazeX = x;
+            p->foveaGazeY = y;
+        }
+        else
+            bError = true;
+    }
+    OPT("fovea-delta") p->foveaDelta = (float)atof(value);
+    OPT("fovea-sigma") p->foveaSigma = (float)atof(value);
+    OPT("fovea-gaze-file") p->foveaGazeFile = strdup(value);
     else
         return X265_PARAM_BAD_NAME;
 
@@ -1589,6 +1611,8 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("film-grain") p->filmGrain = (char* )value;
         OPT("aom-film-grain") p->aomFilmGrain = (char*)value;
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
+        OPT("mcstf-ref-range") p->mcstfFrameRange = atoi(value);
+        OPT("selective-mcstf") p->bSelectiveMCSTF = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
 #if ENABLE_ALPHA
         OPT("alpha")
@@ -1617,6 +1641,21 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
 #endif
         OPT("frame-rc") p->bConfigRCFrame = atobool(value);
         OPT("threaded-me") p->bThreadedME = atobool(value);
+        /* Foveated encoding parameters (also parsed here for x265_param_parse API) */
+        OPT("fovea-gaze")
+        {
+            float x = 0.0f, y = 0.0f;
+            if (sscanf(value, "%f,%f", &x, &y) == 2)
+            {
+                p->foveaGazeX = x;
+                p->foveaGazeY = y;
+            }
+            else
+                bError = true;
+        }
+        OPT("fovea-delta") p->foveaDelta = (float)atof(value);
+        OPT("fovea-sigma") p->foveaSigma = (float)atof(value);
+        OPT("fovea-gaze-file") p->foveaGazeFile = strdup(value);
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -2067,6 +2106,11 @@ int x265_check_params(x265_param* param)
             }
         }
     }
+    if (param->mcstfFrameRange > 4)
+    {
+        param->mcstfFrameRange = 4;
+        x265_log(param, X265_LOG_WARNING, "MCSTF reference range should not exceed 4. Setting MCSTF reference range to 4\n");
+    }
     if (param->bEnableHME)
     {
         for (int level = 0; level < 3; level++)
@@ -2348,7 +2392,11 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
 #endif
     if(param->bEnableTemporalFilter)
+    {
         TOOLOPT(param->bEnableTemporalFilter, "mcstf");
+        TOOLVAL(param->mcstfFrameRange, "mcstf-ref-range=%d");
+        TOOLOPT(param->bSelectiveMCSTF, "selective-mcstf");
+    }
     x265_log(param, X265_LOG_INFO, "tools:%s\n", buf);
     fflush(stderr);
 }
@@ -2628,6 +2676,11 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     if (p->aomFilmGrain)
         s += snprintf(s, bufSize - (s - buf), " aom-film-grain=%s", p->aomFilmGrain);
     BOOL(p->bEnableTemporalFilter, "mcstf");
+    if (p->bEnableTemporalFilter)
+    {
+        s += snprintf(s, bufSize - (s - buf), " mcstf-ref-range=%d", p->mcstfFrameRange);
+        BOOL(p->bSelectiveMCSTF, "selective-mcstf");
+    }
 #if ENABLE_ALPHA
     BOOL(p->bEnableAlpha, "alpha");
 #endif
@@ -2862,6 +2915,7 @@ bool parseMaskingStrength(x265_param* p, const char* value)
 void x265_copy_params(x265_param* dst, x265_param* src)
 {
     dst->mcstfFrameRange = src->mcstfFrameRange;
+    dst->bSelectiveMCSTF = src->bSelectiveMCSTF;
     dst->cpuid = src->cpuid;
     dst->frameNumThreads = src->frameNumThreads;
     if (strlen(src->numaPools)) snprintf(dst->numaPools, X265_MAX_STRING_SIZE, "%s", src->numaPools);
@@ -3167,6 +3221,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bThreadedME = src->bThreadedME;
     dst->tmeTaskBlockSize = src->tmeTaskBlockSize;
     dst->tmeNumBufferRows = src->tmeNumBufferRows;
+    dst->tmeNumThreads = src->tmeNumThreads;
     dst->bEnableFades = src->bEnableFades;
     dst->bEnableSceneCutAwareQp = src->bEnableSceneCutAwareQp;
     dst->fwdMaxScenecutWindow = src->fwdMaxScenecutWindow;
@@ -3182,10 +3237,6 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     }
     dst->bField = src->bField;
     dst->bEnableTemporalFilter = src->bEnableTemporalFilter;
-    dst->temporalFilterStrength = src->temporalFilterStrength;
-    dst->searchRangeForLayer0 = src->searchRangeForLayer0;
-    dst->searchRangeForLayer1 = src->searchRangeForLayer1;
-    dst->searchRangeForLayer2 = src->searchRangeForLayer2;
     dst->confWinRightOffset = src->confWinRightOffset;
     dst->confWinBottomOffset = src->confWinBottomOffset;
     dst->bliveVBV2pass = src->bliveVBV2pass;
@@ -3214,6 +3265,12 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bEnableSBRC = src->bEnableSBRC;
     dst->bConfigRCFrame = src->bConfigRCFrame;
     dst->isAbrLadderEnable = src->isAbrLadderEnable;
+    /* Foveated encoding */
+    dst->foveaGazeX    = src->foveaGazeX;
+    dst->foveaGazeY    = src->foveaGazeY;
+    dst->foveaDelta    = src->foveaDelta;
+    dst->foveaSigma    = src->foveaSigma;
+    dst->foveaGazeFile = src->foveaGazeFile;
 }
 
 #ifdef SVT_HEVC
