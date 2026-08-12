@@ -734,6 +734,7 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
@@ -756,6 +757,7 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
@@ -777,6 +779,7 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
@@ -798,6 +801,7 @@ jobs:
             -DENABLE_CLI=OFF \
             -DEXPORT_C_API=OFF \
             -DENABLE_ASSEMBLY=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
@@ -814,6 +818,7 @@ jobs:
             -DENABLE_CLI=OFF \
             -DEXPORT_C_API=OFF \
             -DENABLE_ASSEMBLY=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
@@ -834,6 +839,7 @@ jobs:
             -DEXTRA_LINK_FLAGS="-L." \
             -DLINKED_10BIT=ON \
             -DLINKED_12BIT=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(sysctl -n hw.logicalcpu)
