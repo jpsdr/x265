@@ -4,6 +4,10 @@
 #include "input.h"
 #include <string>
 #include <map>
+
+#ifndef AVS_FRAME_ALIGN
+#define AVS_FRAME_ALIGN FRAME_ALIGN
+#endif
 #include <avisynth/avisynth_c.h>
 
 #if _WIN32
@@ -23,8 +27,8 @@ using func_t = void*;
 
 #define LOAD_AVS_FUNC(name) \
 {\
-	h->func.name = reinterpret_cast<decltype(h->func.name)>((void*)avs_address(#name));\
-	if (!h->func.name) goto fail;\
+    h->func.name = reinterpret_cast<decltype(h->func.name)>((void*)avs_address(#name));\
+    if (!h->func.name) goto fail;\
 }
 
 namespace X265_NS {
@@ -107,13 +111,13 @@ protected:
     void parseAvsOptions(const char* _options);
 
 public:
+
     static const int avs_planes_packed[1];
     static const int avs_planes_grey[1];
     static const int avs_planes_yuv[3];
     static const int avs_planes_rgb[3];
     static const int avs_planes_yuva[4];
     static const int avs_planes_rgba[4];
-
     AVSInput(InputFileInfo& info)
     {
         h = &handle;
