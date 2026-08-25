@@ -89,13 +89,9 @@ jobs:
         run: |
           git diff origin/${{ github.base_ref }}...HEAD --unified=0 > /tmp/pr.patch
           python3 << 'PYEOF'
-          import re, sys, subprocess, os, difflib, json
+          import re, sys, subprocess, os, difflib
           from collections import Counter
-          CPP_EXTENSIONS    = ('.c', '.cpp', '.h', '.hpp')
-          HEADER_EXTENSIONS = ('.h', '.hpp')
-          BINARY_EXTENSIONS = ('.yuv', '.hevc', '.h265', '.exe',
-                               '.a', '.so', '.dll', '.o', '.lib', '.bin',
-                               '.png', '.jpg', '.jpeg', '.gif')
+          CPP_EXTENSIONS = ('.c', '.cpp', '.h', '.hpp')
           def show_trail(s):
               stripped = s.rstrip('\n')
               visible  = stripped.rstrip()
@@ -117,7 +113,7 @@ jobs:
                       for i in range(start, start + max(count, 1)):
                           changed_lines[current_file].add(i)
           all_issues = []
-          files = [f for f in changed_lines.keys() if f.endswith(('.c', '.cpp', '.h', '.hpp'))]
+          files = [f for f in changed_lines.keys() if f.endswith(CPP_EXTENSIONS)]
           if files:
               result = subprocess.run(
                   [
@@ -153,70 +149,28 @@ jobs:
                               })
                           break
           for changed_file, lines in changed_lines.items():
-              if changed_file.endswith(BINARY_EXTENSIONS):
+              if not changed_file.endswith(CPP_EXTENSIONS):
                   continue
               try:
                   original = open(changed_file, 'r', encoding='utf-8', newline='').readlines()
               except (FileNotFoundError, UnicodeDecodeError):
                   continue
-              if changed_file.endswith(CPP_EXTENSIONS):
-                  result = subprocess.run(
-                      ['clang-format', '--style=file', changed_file],
-                      capture_output=True, text=True
-                  )
-                  formatted = result.stdout.splitlines(keepends=True)
-                  matcher = difflib.SequenceMatcher(
-                      None, original, formatted, autojunk=False)
-                  for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-                      if tag == 'equal':
-                          continue
-                      for k in range(i2 - i1):
-                          orig_line = i1 + k + 1
-                          if orig_line not in lines:
-                              continue
-                          orig = original[i1 + k]
-                          if orig.endswith('\r\n'):
-                              all_issues.append({
-                                  'file'   : changed_file,
-                                  'line'   : orig_line,
-                                  'type'   : 'style',
-                                  'message': (
-                                      f"Windows CRLF line ending (\\r\\n)\n"
-                                      f"         got:      |{orig.rstrip()} ← ends with \\r\\n\n"
-                                      f"         expected: |{orig.rstrip()} ← should end with \\n only"
-                                  )
-                              })
-                              continue
-                          if orig.endswith('\n') and orig[:-1].rstrip() != orig[:-1]:
-                              all_issues.append({
-                                  'file'   : changed_file,
-                                  'line'   : orig_line,
-                                  'type'   : 'style',
-                                  'message': (
-                                      f"trailing whitespace\n"
-                                      f"         got:      |{show_trail(orig)}\n"
-                                      f"         expected: |{orig[:-1].rstrip()}"
-                                  )
-                              })
-                              continue
-                          if orig.startswith('\t'):
-                              n_tabs   = len(orig) - len(orig.lstrip('\t'))
-                              expected = '    ' * n_tabs + orig.lstrip('\t').rstrip()
-                              all_issues.append({
-                                  'file'   : changed_file,
-                                  'line'   : orig_line,
-                                  'type'   : 'style',
-                                  'message': (
-                                      f"tab used instead of spaces\n"
-                                      f"         got:      |{'→' * n_tabs}{orig.lstrip(chr(9)).rstrip()}\n"
-                                      f"         expected: |{expected}"
-                                  )
-                              })
-              else:
-                  for i, orig in enumerate(original):
-                      orig_line = i + 1
+
+              result = subprocess.run(
+                  ['clang-format', '--style=file', changed_file],
+                  capture_output=True, text=True
+              )
+              formatted = result.stdout.splitlines(keepends=True)
+              matcher = difflib.SequenceMatcher(
+                  None, original, formatted, autojunk=False)
+              for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                  if tag == 'equal':
+                      continue
+                  for k in range(i2 - i1):
+                      orig_line = i1 + k + 1
                       if orig_line not in lines:
                           continue
+                      orig = original[i1 + k]
                       if orig.endswith('\r\n'):
                           all_issues.append({
                               'file'   : changed_file,
@@ -240,17 +194,22 @@ jobs:
                                   f"         expected: |{orig[:-1].rstrip()}"
                               )
                           })
-                      if '\t' in orig:
+                          continue
+                      if orig.startswith('\t'):
+                          n_tabs   = len(orig) - len(orig.lstrip('\t'))
+                          expected = '    ' * n_tabs + orig.lstrip('\t').rstrip()
                           all_issues.append({
                               'file'   : changed_file,
                               'line'   : orig_line,
                               'type'   : 'style',
                               'message': (
-                                  f"tab character found\n"
-                                  f"         got:      |{orig.rstrip().replace(chr(9), '→')}\n"
-                                  f"         expected: |{orig.rstrip().replace(chr(9), '    ')}"
+                                  f"tab used instead of spaces\n"
+                                  f"         got:      |{'→' * n_tabs}{orig.lstrip(chr(9)).rstrip()}\n"
+                                  f"         expected: |{expected}"
                               )
                           })
+
+              # Missing newline at end of file
               if original and not original[-1].endswith('\n'):
                   last_line = len(original)
                   if last_line in lines:
@@ -264,7 +223,7 @@ jobs:
                               f"         expected: |{original[-1].rstrip()}↵"
                           )
                       })
-                      
+
           all_issues.sort(key=lambda x: (x['file'], x['line']))
           summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '/tmp/summary.md')
           order = {'error': 0, 'warning': 1, 'style': 2}
@@ -1374,7 +1333,7 @@ jobs:
     name: "Test Linux (${{ matrix.category }})"
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    needs: build-linux
+    needs: [build-linux, prep-assets]
     strategy:
       fail-fast: false
       matrix:
@@ -1432,18 +1391,17 @@ jobs:
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=416x240:rate=30  -pix_fmt yuv420p12le testdata/test_12bit_416x240.yuv
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=1920x1080:rate=25 -pix_fmt yuv420p    testdata/test_8bit_1080p.yuv
 
-      - name: Cache xiph.org test videos
-        id: cache-videos
-        uses: actions/cache@v5
+      - name: "Download xiph video bundle"
+        uses: actions/download-artifact@v8
         with:
-          path: testdata/xiph
-          key: xiph-test-videos-v1
-      - name: Download xiph test videos (cache miss only)
-        if: steps.cache-videos.outputs.cache-hit != 'true'
+          name: xiph-videos-${{ github.run_id }}
+          path: xiph-download
+
+      - name: "Extract xiph videos"
         run: |
           mkdir -p testdata/xiph
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/bus_cif.y4m   https://media.xiph.org/video/derf/y4m/bus_cif.y4m
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/akiyo_cif.y4m https://media.xiph.org/video/derf/y4m/akiyo_cif.y4m
+          tar -xzf xiph-download/xiph_videos.tar.gz -C testdata/xiph
+          rm -rf xiph-download
 
       - name: Define helper
         run: |
@@ -1761,7 +1719,7 @@ jobs:
     name: "Test macOS (${{ matrix.category }})"
     runs-on: macos-latest
     timeout-minutes: 60
-    needs: build-macos
+    needs: [build-macos, prep-assets]
     strategy:
       fail-fast: false
       matrix:
@@ -1806,18 +1764,17 @@ jobs:
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=416x240:rate=30  -pix_fmt yuv420p12le testdata/test_12bit_416x240.yuv
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=1920x1080:rate=25 -pix_fmt yuv420p    testdata/test_8bit_1080p.yuv
 
-      - name: Cache xiph.org test videos
-        id: cache-videos
-        uses: actions/cache@v5
+      - name: "Download xiph video bundle"
+        uses: actions/download-artifact@v8
         with:
-          path: testdata/xiph
-          key: xiph-test-videos-v1
-      - name: Download xiph test videos (cache miss only)
-        if: steps.cache-videos.outputs.cache-hit != 'true'
+          name: xiph-videos-${{ github.run_id }}
+          path: xiph-download
+
+      - name: "Extract xiph videos"
         run: |
           mkdir -p testdata/xiph
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/bus_cif.y4m   https://media.xiph.org/video/derf/y4m/bus_cif.y4m
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/akiyo_cif.y4m https://media.xiph.org/video/derf/y4m/akiyo_cif.y4m
+          tar -xzf xiph-download/xiph_videos.tar.gz -C testdata/xiph
+          rm -rf xiph-download
 
       - name: Define helper
         run: |
@@ -2120,7 +2077,7 @@ jobs:
     name: "Test AArch64 (${{ matrix.category }}, QEMU)"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: build-aarch64
+    needs: [build-aarch64, prep-assets]
     strategy:
       fail-fast: false
       matrix:
@@ -2185,18 +2142,17 @@ jobs:
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=416x240:rate=30  -pix_fmt yuv420p12le testdata/test_12bit_416x240.yuv
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=1920x1080:rate=25 -pix_fmt yuv420p    testdata/test_8bit_1080p.yuv
 
-      - name: Cache xiph.org test videos
-        id: cache-videos
-        uses: actions/cache@v5
+      - name: "Download xiph video bundle"
+        uses: actions/download-artifact@v8
         with:
-          path: testdata/xiph
-          key: xiph-test-videos-v1
-      - name: Download xiph test videos (cache miss only)
-        if: steps.cache-videos.outputs.cache-hit != 'true'
+          name: xiph-videos-${{ github.run_id }}
+          path: xiph-download
+
+      - name: "Extract xiph videos"
         run: |
           mkdir -p testdata/xiph
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/bus_cif.y4m   https://media.xiph.org/video/derf/y4m/bus_cif.y4m
-          wget -q --tries=3 --timeout=60 -O testdata/xiph/akiyo_cif.y4m https://media.xiph.org/video/derf/y4m/akiyo_cif.y4m
+          tar -xzf xiph-download/xiph_videos.tar.gz -C testdata/xiph
+          rm -rf xiph-download
 
       - name: Define helper
         run: |
@@ -2499,7 +2455,7 @@ jobs:
     name: "Test Windows (${{ matrix.category }})"
     runs-on: windows-latest
     timeout-minutes: 60
-    needs: build-windows
+    needs: [build-windows, prep-assets]
     strategy:
       fail-fast: false
       matrix:
@@ -2542,18 +2498,17 @@ jobs:
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=416x240:rate=30  -pix_fmt yuv420p12le testdata/test_12bit_416x240.yuv
           ffmpeg -y -f lavfi -i testsrc=duration=3:size=1920x1080:rate=25 -pix_fmt yuv420p    testdata/test_8bit_1080p.yuv
 
-      - name: Cache xiph.org test videos
-        id: cache-videos
-        uses: actions/cache@v5
+      - name: "Download xiph video bundle"
+        uses: actions/download-artifact@v8
         with:
-          path: testdata/xiph
-          key: xiph-test-videos-v1
-      - name: Download xiph test videos (cache miss only)
-        if: steps.cache-videos.outputs.cache-hit != 'true'
+          name: xiph-videos-${{ github.run_id }}
+          path: xiph-download
+
+      - name: "Extract xiph videos"
         run: |
           mkdir -p testdata/xiph
-          curl -sSL --retry 3 --max-time 60 -o testdata/xiph/bus_cif.y4m   https://media.xiph.org/video/derf/y4m/bus_cif.y4m
-          curl -sSL --retry 3 --max-time 60 -o testdata/xiph/akiyo_cif.y4m https://media.xiph.org/video/derf/y4m/akiyo_cif.y4m
+          tar -xzf xiph-download/xiph_videos.tar.gz -C testdata/xiph
+          rm -rf xiph-download
 
       - name: Define helper
         run: |
@@ -2850,48 +2805,490 @@ jobs:
   prep-assets:
     name: "Prepare Assets"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    if: github.event_name == 'pull_request_target'
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ASSETS_REPO: "https://github.com/Multicorewareinc/x265-test-assets.git"
     steps:
-      - name: "Download smoke assets"
+      - name: "Clone assets repo (with LFS)"
         run: |
-          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
-          TAG="v4.2"
-          TOKEN="${{ secrets.ASSETS_TOKEN }}"
+          set -euo pipefail
+          git clone --depth 1 "$ASSETS_REPO" x265-test-assets
+          cd x265-test-assets
+          git lfs install --local
+          git lfs pull
+
+      - name: "Validate archive integrity"
+        run: |
+          set -euo pipefail
+          for f in x265-test-assets/*.tar.gz; do
+            gzip -t "$f"
+          done
+          ls -lh x265-test-assets/*.tar.gz
+
+      - name: "Prepare smoke assets"
+        if: github.event_name == 'pull_request_target'
+        run: |
+          set -euo pipefail
           mkdir -p assets
-          download_asset() {
-            local filename=$1
-            echo "=== Downloading $filename ==="
-            ASSET_ID=$(curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
-              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
-            if [ -z "$ASSET_ID" ]; then
-              echo "Asset '$filename' not found in release $TAG"
+          for f in conf.tar.gz decoders-linux.tar.gz decoders-windows.tar.gz goldens-linux.tar.gz goldens-windows.tar.gz smoke-tests.tar.gz videos.tar.gz; do
+            src="x265-test-assets/$f"
+            if [ ! -f "$src" ]; then
+              echo "ERROR: expected smoke asset not found in repo: $f"
               exit 1
             fi
-            curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/octet-stream" \
-              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
-              -o "assets/$filename"
-            echo "[OK] $filename downloaded"
-          }
-          download_asset "videos.tar.gz"
-          download_asset "goldens-linux.tar.gz"
-          download_asset "goldens-windows.tar.gz"
-          download_asset "decoders-linux.tar.gz"
-          download_asset "decoders-windows.tar.gz"
-          download_asset "conf.tar.gz"
-          download_asset "smoke-tests.tar.gz"
+            cp "$src" assets/
+          done
+          ls -lh assets/
 
-      - name: "Upload assets artifact"
+      - name: "Upload smoke assets"
+        if: github.event_name == 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: smoke-assets
           path: assets/*.tar.gz
           retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+      - name: "Upload sanitizer videos"
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-videos-${{ github.run_id }}
+          path: x265-test-assets/sanitizer_videos.tar.gz
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+      - name: "Upload xiph videos"
+        uses: actions/upload-artifact@v7
+        with:
+          name: xiph-videos-${{ github.run_id }}
+          path: x265-test-assets/xiph_videos.tar.gz
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  build-tsan:
+    name: "Build TSAN+UBSAN (${{ matrix.compiler }}, ${{ matrix.bitdepth }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        bitdepth: [8bit, 10bit]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-tsan-${{ matrix.compiler }}-${{ matrix.bitdepth }}-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || 'master' }}-${{ github.event.pull_request.head.sha || github.sha }}
+          restore-keys: |
+            ${{ github.event.pull_request.number && format('ccache-tsan-{0}-{1}-pr{2}-', matrix.compiler, matrix.bitdepth, github.event.pull_request.number) || '' }}
+            ccache-tsan-${{ matrix.compiler }}-${{ matrix.bitdepth }}-master-
+
+      - name: Cache apt packages
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/apt-archives
+          key: apt-build-tsan-v1
+          restore-keys: apt-build-tsan-v1
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev clang
+          gcc --version
+          clang --version
+
+      - name: Prepare apt cache
+        if: always()
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
+
+      - name: Build (TSAN+UBSAN instrumented)
+        run: |
+          export PATH="/usr/lib/ccache:$PATH"
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            export CC=clang-18 CXX=clang++-18
+          else
+            export CC=gcc CXX=g++
+          fi
+          mkdir -p build/tsan && cd build/tsan
+          HBD_ARGS=""
+          if [ "${{ matrix.bitdepth }}" = "10bit" ]; then
+            HBD_ARGS="-DHIGH_BIT_DEPTH=ON"
+          fi
+          cmake ../../source \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_C_FLAGS="-fsanitize=thread,undefined -g -O1" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread,undefined -g -O1" \
+            -DENABLE_SHARED=OFF \
+            $HBD_ARGS
+          make -j$(nproc)
+          test -f x265 && echo "TSAN+UBSAN ${{ matrix.compiler }}/${{ matrix.bitdepth }} CLI binary OK"
+          ./x265 --version
+
+      - name: Verify TSAN instrumentation
+        run: |
+          # If ccache served a stale non-instrumented object set, or flags were
+          # dropped, the binary silently has no instrumentation and every test
+          # would report "Clean". Fail the build instead.
+          if nm build/tsan/x265 2>/dev/null | grep -q '__tsan_init' \
+             || strings build/tsan/x265 | grep -q 'ThreadSanitizer'; then
+            echo "[OK] Binary is TSAN-instrumented"
+          else
+            echo "::error::x265 ${{ matrix.compiler }}/${{ matrix.bitdepth }} binary is NOT TSAN-instrumented!"
+            exit 1
+          fi
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: x265-tsan-${{ matrix.compiler }}-${{ matrix.bitdepth }}
+          path: build/tsan/x265
+          retention-days: 3
+
+  build-asan:
+    name: "Build ASAN+UBSAN (${{ matrix.compiler }}, ${{ matrix.bitdepth }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        bitdepth: [8bit, 10bit]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-asan-${{ matrix.compiler }}-${{ matrix.bitdepth }}-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || 'master' }}-${{ github.event.pull_request.head.sha || github.sha }}
+          restore-keys: |
+            ${{ github.event.pull_request.number && format('ccache-asan-{0}-{1}-pr{2}-', matrix.compiler, matrix.bitdepth, github.event.pull_request.number) || '' }}
+            ccache-asan-${{ matrix.compiler }}-${{ matrix.bitdepth }}-master-
+
+      - name: Cache apt packages
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/apt-archives
+          key: apt-build-asan-v1
+          restore-keys: apt-build-asan-v1
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev clang
+          gcc --version
+          clang --version
+
+      - name: Prepare apt cache
+        if: always()
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
+
+      - name: Build (ASAN+UBSAN instrumented)
+        run: |
+          export PATH="/usr/lib/ccache:$PATH"
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            export CC=clang-18 CXX=clang++-18
+          else
+            export CC=gcc CXX=g++
+          fi
+          mkdir -p build/asan && cd build/asan
+          HBD_ARGS=""
+          if [ "${{ matrix.bitdepth }}" = "10bit" ]; then
+            HBD_ARGS="-DHIGH_BIT_DEPTH=ON"
+          fi
+          cmake ../../source \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1" \
+            -DENABLE_SHARED=OFF \
+            $HBD_ARGS
+          make -j$(nproc)
+          test -f x265 && echo "ASAN+UBSAN ${{ matrix.compiler }}/${{ matrix.bitdepth }} CLI binary OK"
+          ./x265 --version
+
+      - name: Verify ASAN instrumentation
+        run: |
+          if nm build/asan/x265 2>/dev/null | grep -q '__asan_init' \
+             || strings build/asan/x265 | grep -q 'AddressSanitizer'; then
+            echo "[OK] Binary is ASAN-instrumented"
+          else
+            echo "::error::x265 ${{ matrix.compiler }}/${{ matrix.bitdepth }} binary is NOT ASAN-instrumented!"
+            exit 1
+          fi
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: x265-asan-${{ matrix.compiler }}-${{ matrix.bitdepth }}
+          path: build/asan/x265
+          retention-days: 3
+
+  test-tsan:
+    name: "Test TSAN+UBSAN (${{ matrix.compiler }}, ${{ matrix.clip.label }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: [build-tsan, prep-assets]
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        clip:
+          - id: 8bit-ultrafast-ducks_take_off
+            label: "8bit ultrafast ducks_take_off"
+            bitdepth: 8bit
+            input: ducks_take_off_420_720p50.y4m
+            args: >-
+              --preset ultrafast --constrained-intra --rd 1 --no-info --hash=1
+              --psnr --ssim --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-medium-mobile_calendar
+            label: "8bit medium mobile_calendar"
+            bitdepth: 8bit
+            input: mobile_calendar_422_ntsc.y4m
+            args: >-
+              --preset medium --bitrate 500 -F4 --no-info --hash=1 --psnr --ssim
+              --log-level=full --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-slow-old_town_cross
+            label: "8bit slow old_town_cross"
+            bitdepth: 8bit
+            input: old_town_cross_444_720p50.y4m
+            args: >-
+              --preset slow --rdoq-level 1 --early-skip --ref 7 --no-b-pyramid
+              --no-info --hash=1 --psnr --ssim --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-veryslow-silent_cif
+            label: "8bit veryslow silent_cif"
+            bitdepth: 8bit
+            input: silent_cif_420.y4m
+            args: >-
+              --preset veryslow --me sea --no-info --hash=1 --psnr --ssim --frames 100
+              --log-level=debug --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 10bit-veryfast-RaceHorses_10bit
+            label: "10bit veryfast RaceHorses_10bit"
+            bitdepth: 10bit
+            input: RaceHorses_416x240_30_10bit.yuv
+            args: >-
+              --preset veryfast --weightb --no-info --hash=1 --psnr --ssim
+              --input-res=416x240 --input-depth=10 --input-csp=i420 --fps=30
+              --csv /tmp/out.csv -o /tmp/out.hevc
+    steps:
+      - name: Download TSAN binary
+        uses: actions/download-artifact@v8
+        with:
+          name: x265-tsan-${{ matrix.compiler }}-${{ matrix.clip.bitdepth }}
+          path: dist
+
+      - name: Download sanitizer video bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: sanitizer-videos-${{ github.run_id }}
+
+      - name: Extract videos
+        run: |
+          mkdir -p tsan-videos
+          tar -xzf sanitizer_videos.tar.gz -C tsan-videos/
+          rm sanitizer_videos.tar.gz
+          ls -la tsan-videos/
+
+      - name: Write TSAN suppressions
+        run: |
+          cat > tsan-suppressions.txt << 'EOF'
+          # ThreadSanitizer's own internal thread-registration probe
+          # (__sanitizer::IsAccessibleMemoryRange, implemented via pipe())
+          # races against itself when x265 spins up several threads at
+          # startup (ThreadPool::start / PassEncoder::startThreads /
+          # Lookahead workers). Confirmed identical under GCC and Clang;
+          # not x265 application code, not a real data race.
+          race:IsAccessibleMemoryRange
+          EOF
+
+      - name: Run TSAN+UBSAN regression test
+        run: |
+          chmod +x dist/x265
+          X265=$(pwd)/dist/x265
+          VID=$(pwd)/tsan-videos
+          mkdir -p tsan-logs summaries
+          export TSAN_OPTIONS="halt_on_error=0:history_size=7:suppressions=$(pwd)/tsan-suppressions.txt"
+          export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+          echo "TSAN_OPTIONS=$TSAN_OPTIONS"
+          echo "UBSAN_OPTIONS=$UBSAN_OPTIONS"
+          LABEL="${{ matrix.clip.label }}"
+          LOGFILE="tsan-logs/${{ matrix.clip.id }}.log"
+          echo ""
+          echo "=== $LABEL — log: $LOGFILE ==="
+          start_ts=$SECONDS
+          $X265 ${{ matrix.clip.args }} "$VID/${{ matrix.clip.input }}" 2>&1 | tee "$LOGFILE" || true
+          rc=${PIPESTATUS[0]:-0}
+          echo "[debug] exit code: $rc | duration: $((SECONDS - start_ts))s"
+          n_tsan=$(grep -c "WARNING: ThreadSanitizer" "$LOGFILE" || true); n_tsan=${n_tsan:-0}
+          n_ubsan=$(grep -c "runtime error:" "$LOGFILE" || true); n_ubsan=${n_ubsan:-0}
+          n=$((n_tsan + n_ubsan))
+          if [ "$n" -gt 0 ]; then
+            echo "[SANITIZER] !! RESULT $LABEL: ISSUE DETECTED (tsan=$n_tsan, ubsan=$n_ubsan)"
+            grep "SUMMARY: ThreadSanitizer" "$LOGFILE" | sort | uniq -c | sort -rn || true
+            echo "| \`$LABEL\` | ISSUE DETECTED (tsan=$n_tsan, ubsan=$n_ubsan) |" > summaries/tsan-${{ matrix.compiler }}-${{ matrix.clip.id }}.log
+          else
+            echo "[SANITIZER] RESULT $LABEL: clean"
+            echo "| \`$LABEL\` | Clean |" > summaries/tsan-${{ matrix.compiler }}-${{ matrix.clip.id }}.log
+          fi
+          rm -f /tmp/out.hevc /tmp/out.csv
+          test "$n" -eq 0
+
+      - name: Upload console log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsan-console-log-${{ matrix.compiler }}-${{ matrix.clip.id }}
+          path: tsan-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: summaries-tsan-${{ matrix.compiler }}-${{ matrix.clip.id }}
+          path: summaries/*.log
+          retention-days: 3
+
+  test-asan:
+    name: "Test ASAN+UBSAN (${{ matrix.compiler }}, ${{ matrix.clip.label }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: [build-asan, prep-assets]
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        clip:
+          - id: 8bit-ultrafast-ducks_take_off
+            label: "8bit ultrafast ducks_take_off"
+            bitdepth: 8bit
+            input: ducks_take_off_420_720p50.y4m
+            args: >-
+              --preset ultrafast --constrained-intra --rd 1 --no-info --hash=1
+              --psnr --ssim --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-medium-mobile_calendar
+            label: "8bit medium mobile_calendar"
+            bitdepth: 8bit
+            input: mobile_calendar_422_ntsc.y4m
+            args: >-
+              --preset medium --bitrate 500 -F4 --no-info --hash=1 --psnr --ssim
+              --log-level=full --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-slow-old_town_cross
+            label: "8bit slow old_town_cross"
+            bitdepth: 8bit
+            input: old_town_cross_444_720p50.y4m
+            args: >-
+              --preset slow --rdoq-level 1 --early-skip --ref 7 --no-b-pyramid
+              --no-info --hash=1 --psnr --ssim --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 8bit-veryslow-silent_cif
+            label: "8bit veryslow silent_cif"
+            bitdepth: 8bit
+            input: silent_cif_420.y4m
+            args: >-
+              --preset veryslow --me sea --no-info --hash=1 --psnr --ssim
+              --log-level=debug --csv /tmp/out.csv -o /tmp/out.hevc
+          - id: 10bit-veryfast-RaceHorses_10bit
+            label: "10bit veryfast RaceHorses_10bit"
+            bitdepth: 10bit
+            input: RaceHorses_416x240_30_10bit.yuv
+            args: >-
+              --preset veryfast --weightb --no-info --hash=1 --psnr --ssim
+              --input-res=416x240 --input-depth=10 --input-csp=i420 --fps=30
+              --csv /tmp/out.csv -o /tmp/out.hevc
+    steps:
+      - name: Download ASAN binary
+        uses: actions/download-artifact@v8
+        with:
+          name: x265-asan-${{ matrix.compiler }}-${{ matrix.clip.bitdepth }}
+          path: dist
+
+      - name: Download sanitizer video bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: sanitizer-videos-${{ github.run_id }}
+
+      - name: Extract videos
+        run: |
+          mkdir -p asan-videos
+          tar -xzf sanitizer_videos.tar.gz -C asan-videos/
+          rm sanitizer_videos.tar.gz
+          ls -la asan-videos/
+
+      - name: Run ASAN+UBSAN regression test
+        run: |
+          chmod +x dist/x265
+          X265=$(pwd)/dist/x265
+          VID=$(pwd)/asan-videos
+          mkdir -p asan-logs summaries
+          export ASAN_OPTIONS="halt_on_error=0:detect_leaks=0"
+          export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+          echo "ASAN_OPTIONS=$ASAN_OPTIONS"
+          echo "UBSAN_OPTIONS=$UBSAN_OPTIONS"
+          LABEL="${{ matrix.clip.label }}"
+          LOGFILE="asan-logs/${{ matrix.clip.id }}.log"
+          echo ""
+          echo "=== $LABEL — log: $LOGFILE ==="
+          start_ts=$SECONDS
+          $X265 ${{ matrix.clip.args }} "$VID/${{ matrix.clip.input }}" 2>&1 | tee "$LOGFILE" || true
+          rc=${PIPESTATUS[0]:-0}
+          echo "[debug] exit code: $rc | duration: $((SECONDS - start_ts))s"
+          n_asan=$(grep -c "ERROR: AddressSanitizer\|SUMMARY: AddressSanitizer" "$LOGFILE" || true); n_asan=${n_asan:-0}
+          n_ubsan=$(grep -c "runtime error:" "$LOGFILE" || true); n_ubsan=${n_ubsan:-0}
+          n=$((n_asan + n_ubsan))
+          if [ "$n" -gt 0 ]; then
+            echo "[SANITIZER] !! RESULT $LABEL: ISSUE DETECTED (asan=$n_asan, ubsan=$n_ubsan)"
+            echo "| \`$LABEL\` | ISSUE DETECTED (asan=$n_asan, ubsan=$n_ubsan) |" > summaries/asan-${{ matrix.compiler }}-${{ matrix.clip.id }}.log
+          else
+            echo "[SANITIZER] RESULT $LABEL: clean"
+            echo "| \`$LABEL\` | Clean |" > summaries/asan-${{ matrix.compiler }}-${{ matrix.clip.id }}.log
+          fi
+          rm -f /tmp/out.hevc /tmp/out.csv
+          test "$n" -eq 0
+
+      - name: Upload console log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: asan-console-log-${{ matrix.compiler }}-${{ matrix.clip.id }}
+          path: asan-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: summaries-asan-${{ matrix.compiler }}-${{ matrix.clip.id }}
+          path: summaries/*.log
+          retention-days: 3
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Smoke - Linux: reuses build-linux's already-built x265
@@ -3262,6 +3659,8 @@ jobs:
       - test-macos
       - test-aarch64
       - test-windows
+      - test-tsan
+      - test-asan
     steps:
       - name: Download all summaries
         uses: actions/download-artifact@v8
@@ -3428,6 +3827,8 @@ jobs:
       - test-macos
       - test-aarch64
       - test-windows
+      - test-tsan
+      - test-asan
     if: always() && (github.event_name == 'pull_request_target')
 
     steps:
@@ -3452,6 +3853,8 @@ jobs:
           echo "  Test macOS    : ${{ needs.test-macos.result }}"
           echo "  Test AArch64  : ${{ needs.test-aarch64.result }}"
           echo "  Test Windows  : ${{ needs.test-windows.result }}"
+          echo "  Test TSAN+UBSAN : ${{ needs.test-tsan.result }}"
+          echo "  Test ASAN+UBSAN : ${{ needs.test-asan.result }}"
           echo "================================================"
           ALL_PASS=true
           [[ "${{ needs.code-quality.result }}"    != "success" ]] && ALL_PASS=false && echo "   -> Code quality gate failed"
@@ -3467,6 +3870,8 @@ jobs:
           [[ "${{ needs.test-macos.result }}"      != "success" ]] && ALL_PASS=false && echo "   -> macOS tests failed"
           [[ "${{ needs.test-aarch64.result }}"    != "success" ]] && ALL_PASS=false && echo "   -> AArch64 tests failed"
           [[ "${{ needs.test-windows.result }}"    != "success" ]] && ALL_PASS=false && echo "   -> Windows tests failed"
+          [[ "${{ needs.test-tsan.result }}"        != "success" ]] && ALL_PASS=false && echo "   -> TSAN+UBSAN test failed - check uploaded log artifacts"
+          [[ "${{ needs.test-asan.result }}"        != "success" ]] && ALL_PASS=false && echo "   -> ASAN+UBSAN test failed - check uploaded log artifacts"
           if $ALL_PASS; then
             echo "[OK] ALL CHECKS PASSED - READY TO MERGE"
           else
