@@ -1086,12 +1086,25 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
     endif()
 endif()
 source_group(ASM FILES ${ASM_SRCS})
+
+# The asm objects are linked into more than one target. CMake writes the rule
+# that generates an object into every target that consumes it, so a parallel
+# build can run two compilers writing the same object file at once and a link
+# then reads a half written object. Generate them from a single target that the
+# consumers depend on, so they are complete before anything links them.
+if(ASM_OBJS)
+    add_custom_target(x265-asm DEPENDS ${ASM_OBJS})
+endif()
+
 if(ENABLE_HDR10_PLUS)
     add_library(x265-static STATIC $<TARGET_OBJECTS:encoder> $<TARGET_OBJECTS:common> $<TARGET_OBJECTS:dynamicHDR10> ${ASM_OBJS})
     add_library(hdr10plus-static STATIC $<TARGET_OBJECTS:dynamicHDR10>)
     set_target_properties(hdr10plus-static PROPERTIES OUTPUT_NAME hdr10plus)
 else()
     add_library(x265-static STATIC $<TARGET_OBJECTS:encoder> $<TARGET_OBJECTS:common> ${ASM_OBJS})
+endif()
+if(TARGET x265-asm)
+    add_dependencies(x265-static x265-asm)
 endif()
 if(NOT MSVC)
     set_target_properties(x265-static PROPERTIES OUTPUT_NAME x265)
@@ -1189,6 +1202,9 @@ if(ENABLE_SHARED)
     else()
         add_library(x265-shared SHARED "${PROJECT_BINARY_DIR}/x265.def" ${ASM_OBJS}
                    ${X265LIB_RC_FILE} $<TARGET_OBJECTS:encoder> $<TARGET_OBJECTS:common>)
+    endif()
+    if(TARGET x265-asm)
+        add_dependencies(x265-shared x265-asm)
     endif()
     if(EXTRA_LIB)
         target_link_libraries(x265-shared ${EXTRA_LIB})
@@ -1339,6 +1355,9 @@ if(ENABLE_CLI)
             add_executable(cli ../COPYING ${InputFiles} ${OutputFiles} ${GETOPT}
                         x265.cpp x265.h x265cli.cpp x265cli.h abrEncApp.cpp abrEncApp.h
                         $<TARGET_OBJECTS:encoder> $<TARGET_OBJECTS:common> ${ASM_OBJS})
+        endif()
+        if(TARGET x265-asm)
+            add_dependencies(cli x265-asm)
         endif()
     else()
         add_executable(cli ../COPYING ${InputFiles} ${OutputFiles} ${GETOPT} ${X265_RC_FILE}
