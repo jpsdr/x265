@@ -22,7 +22,20 @@ void intraFilter_neon(const pixel* samples, pixel* filtered) /* 1:2:1 filtering 
     uint16x8_t two_vec = vdupq_n_u16(2);
 #if !HIGH_BIT_DEPTH
     {
-        for(int i = 0; i < tuSize2 + tuSize2; i+=8)
+        // Avoid reading samples[-1]. build it from the loaded sample1 instead.
+        // The first value is unused since filtered[0] is overwritten below anyway.
+        {
+            uint8x8_t raw1 = vld1_u8(&samples[0]);
+            uint16x8_t sample1 = vmovl_u8(raw1);
+            uint16x8_t sample2 = vmovl_u8(vext_u8(raw1, raw1, 7));
+            uint16x8_t sample3 = vmovl_u8(vld1_u8(&samples[1]));
+
+            uint16x8_t result1 = vaddq_u16(vshlq_n_u16(sample1,1), sample2 );
+            uint16x8_t result2 = vaddq_u16(sample3, two_vec);
+            uint16x8_t result3 = vaddq_u16(result1,result2);
+            vst1_u8(&filtered[0] , vmovn_u16(vshrq_n_u16(result3, 2)));
+        }
+        for(int i = 8; i < tuSize2 + tuSize2; i+=8)
          {
             uint16x8_t sample1 = vmovl_u8(vld1_u8(&samples[i]));
             uint16x8_t sample2 = vmovl_u8(vld1_u8(&samples[i-1]));
@@ -36,7 +49,17 @@ void intraFilter_neon(const pixel* samples, pixel* filtered) /* 1:2:1 filtering 
     }
 #else
     {
-        for(int i = 0; i < tuSize2 + tuSize2; i+=8)
+        {
+            uint16x8_t sample1 = vld1q_u16(&samples[0]);
+            uint16x8_t sample2 = vextq_u16(sample1, sample1, 7);
+            uint16x8_t sample3 = vld1q_u16(&samples[1]);
+
+            uint16x8_t result1 = vaddq_u16(vshlq_n_u16(sample1,1), sample2 );
+            uint16x8_t result2 = vaddq_u16(sample3, two_vec);
+            uint16x8_t result3 = vaddq_u16(result1,result2);
+            vst1q_u16(&filtered[0] , vshrq_n_u16(result3, 2));
+        }
+        for(int i = 8; i < tuSize2 + tuSize2; i+=8)
         {
             uint16x8_t sample1 = vld1q_u16(&samples[i]);
             uint16x8_t sample2 = vld1q_u16(&samples[i-1]);
