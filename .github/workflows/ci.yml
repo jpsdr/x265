@@ -45,7 +45,7 @@ jobs:
   code-quality:
     name: "Code Quality"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     if: github.event_name == 'pull_request_target'
     steps:
       - name: Checkout PR branch
@@ -124,7 +124,9 @@ jobs:
                       '--inline-suppr',
                       '--template={file}:{line}:{column}: {severity}: {message} [{id}]',
                       '--quiet',
-                  ] + files,
+                      '-j', str(os.cpu_count() or 2),
+                      'source/',
+                  ],
                   capture_output=True, text=True
               )
               for line in result.stderr.splitlines():
