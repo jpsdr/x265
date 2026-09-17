@@ -118,6 +118,7 @@ jobs:
               result = subprocess.run(
                   [
                       'cppcheck',
+                      '--language=c++',
                       '--enable=warning,performance,portability,style',
                       '--suppress=missingIncludeSystem',
                       '--inline-suppr',
