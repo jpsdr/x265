@@ -81,7 +81,7 @@ inline int getICRate(uint32_t absLevel, int32_t diffLevel, const int* greaterOne
             rate += egs << 15;
 
             // NOTE: in here, expGolomb=true means (symbol >= maxVlc + 1)
-            X265_CHECK(X265_MIN(symbol, (maxVlc + 1)) == (int)maxVlc + 1, "min check failure\n");
+            X265_CHECK(X265_MIN(symbol, (maxVlc + 1)) == maxVlc + 1, "min check failure\n");
             symbol = maxVlc + 1;
         }
 
