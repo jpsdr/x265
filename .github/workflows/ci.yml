@@ -423,6 +423,8 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -445,6 +447,8 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -466,6 +470,8 @@ jobs:
             -DENABLE_CLI=ON \
             -DENABLE_ASSEMBLY=ON \
             -DENABLE_TESTS=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -487,6 +493,8 @@ jobs:
             -DENABLE_CLI=OFF \
             -DEXPORT_C_API=OFF \
             -DENABLE_ASSEMBLY=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -503,6 +511,8 @@ jobs:
             -DENABLE_CLI=OFF \
             -DEXPORT_C_API=OFF \
             -DENABLE_ASSEMBLY=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -625,6 +635,8 @@ jobs:
             -DEXTRA_LINK_FLAGS="-L." \
             -DLINKED_10BIT=ON \
             -DLINKED_12BIT=ON \
+            -DWARNINGS_AS_ERRORS=ON \
+            -DCHECKED_BUILD=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           make -j$(nproc)
@@ -1130,7 +1142,7 @@ jobs:
           $nasmPath = "C:\Program Files\NASM"
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\8bit -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\8bit --config ${{ matrix.config }} -j"
+          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\8bit -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\8bit --config ${{ matrix.config }} -j"
           if (!(Test-Path "build\8bit\${{ matrix.config }}\x265.exe")) { exit 1 }
           Write-Host "8-bit CLI OK (${{ matrix.config }})"
           & "build\8bit\${{ matrix.config }}\x265.exe" --version
@@ -1145,7 +1157,7 @@ jobs:
           $nasmPath = "C:\Program Files\NASM"
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\10bit -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\10bit --config ${{ matrix.config }} -j"
+          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\10bit -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\10bit --config ${{ matrix.config }} -j"
           if (!(Test-Path "build\10bit\${{ matrix.config }}\x265.exe")) { exit 1 }
           Write-Host "10-bit CLI OK (${{ matrix.config }})"
           & "build\10bit\${{ matrix.config }}\x265.exe" --version
@@ -1159,7 +1171,7 @@ jobs:
           $nasmPath = "C:\Program Files\NASM"
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\12bit -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\12bit --config ${{ matrix.config }} -j"
+          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\12bit -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\12bit --config ${{ matrix.config }} -j"
           if (!(Test-Path "build\12bit\${{ matrix.config }}\x265.exe")) { exit 1 }
           Write-Host "12-bit CLI OK (${{ matrix.config }})"
           & "build\12bit\${{ matrix.config }}\x265.exe" --version
@@ -1173,7 +1185,7 @@ jobs:
           $nasmPath = "C:\Program Files\NASM"
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\12bit -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\12bit --config Release -j"
+          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\12bit -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\12bit --config Release -j"
 
       - name: Build multilib 10-bit component
         if: matrix.variant == 'multilib-10bit-component'
@@ -1182,7 +1194,7 @@ jobs:
           $nasmPath = "C:\Program Files\NASM"
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\10bit -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\10bit --config Release -j"
+          cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\10bit -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\10bit --config Release -j"
 
       - name: Upload 8-bit artifact
         if: matrix.variant == '8bit'
@@ -1306,7 +1318,7 @@ jobs:
           set(LINKED_10BIT ON CACHE BOOL "" FORCE)
           set(LINKED_12BIT ON CACHE BOOL "" FORCE)
           "@ | Set-Content $cacheFile
-              cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\8bit -C build\multilib\8bit\init.cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\8bit --config Release -j"
+              cmd /c "`"$vcvars`" && set PATH=$nasmPath;%PATH% && cmake -S source -B build\multilib\8bit -C build\multilib\8bit\init.cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DWARNINGS_AS_ERRORS=ON -DCHECKED_BUILD=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache && cmake --build build\multilib\8bit --config Release -j"
               if (!(Test-Path "build\multilib\8bit\Release\x265.exe")) { exit 1 }
               Write-Host "Multilib CLI OK"
               & "build\multilib\8bit\Release\x265.exe" --version
