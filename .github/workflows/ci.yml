@@ -45,7 +45,7 @@ jobs:
   code-quality:
     name: "Code Quality"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     if: github.event_name == 'pull_request_target'
     steps:
       - name: Checkout PR branch
@@ -358,7 +358,7 @@ jobs:
 
   build-linux:
     name: "Build Linux (${{ matrix.variant }}, ${{ matrix.config }})"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -395,8 +395,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /home/runner/apt-archives
-          key: apt-build-linux-v2
-          restore-keys: apt-build-linux-v2
+          key: apt-build-linux-v3
+          restore-keys: apt-build-linux-v3
       - name: Pre-populate apt cache
         run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
@@ -567,7 +567,7 @@ jobs:
 
   build-linux-multilib:
     name: "Build Linux (multilib, linked)"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: build-linux
     steps:
@@ -592,8 +592,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /home/runner/apt-archives
-          key: apt-build-linux-v2
-          restore-keys: apt-build-linux-v2
+          key: apt-build-linux-v3
+          restore-keys: apt-build-linux-v3
       - name: Pre-populate apt cache
         run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
@@ -1077,7 +1077,7 @@ jobs:
 
   build-windows:
     name: "Build Windows (${{ matrix.variant }}, ${{ matrix.config }})"
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 60
     env:
       SCCACHE_DIR: ${{ github.workspace }}\sccache_cache
@@ -1244,7 +1244,7 @@ jobs:
 
   build-windows-multilib:
     name: "Build Windows (multilib, linked)"
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 60
     needs: build-windows
     env:
@@ -1346,7 +1346,7 @@ jobs:
 
   test-linux:
     name: "Test Linux (${{ matrix.category }})"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: [build-linux, prep-assets]
     strategy:
@@ -1376,8 +1376,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /home/runner/apt-archives
-          key: apt-test-linux-v2
-          restore-keys: apt-test-linux-v2
+          key: apt-test-linux-v3
+          restore-keys: apt-test-linux-v3
       - name: Pre-populate apt cache
         run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
@@ -2468,7 +2468,7 @@ jobs:
 
   test-windows:
     name: "Test Windows (${{ matrix.category }})"
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 60
     needs: [build-windows, prep-assets]
     strategy:
@@ -2824,15 +2824,17 @@ jobs:
     permissions:
       contents: read
     env:
-      ASSETS_REPO: "https://github.com/Multicorewareinc/x265-test-assets.git"
+      ASSETS_REPO: "Multicorewareinc/x265-test-assets"
     steps:
-      - name: "Clone assets repo (with LFS)"
+      - name: "Download test assets from release"
         run: |
           set -euo pipefail
-          git clone --depth 1 "$ASSETS_REPO" x265-test-assets
-          cd x265-test-assets
-          git lfs install --local
-          git lfs pull
+          mkdir -p x265-test-assets
+          BASE_URL="https://github.com/${ASSETS_REPO}/releases/latest/download"
+          for f in conf.tar.gz decoders-linux.tar.gz decoders-windows.tar.gz goldens-linux.tar.gz goldens-windows.tar.gz sanitizer_videos.tar.gz videos.tar.gz xiph_videos.tar.gz; do
+            curl -fSL --retry 5 --retry-delay 5 --retry-all-errors -C - -o "x265-test-assets/$f" "$BASE_URL/$f"
+          done
+          ls -lh x265-test-assets/
 
       - name: "Validate archive integrity"
         run: |
@@ -2847,7 +2849,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets
-          for f in conf.tar.gz decoders-linux.tar.gz decoders-windows.tar.gz goldens-linux.tar.gz goldens-windows.tar.gz smoke-tests.tar.gz videos.tar.gz; do
+          for f in conf.tar.gz decoders-linux.tar.gz decoders-windows.tar.gz goldens-linux.tar.gz goldens-windows.tar.gz videos.tar.gz; do
             src="x265-test-assets/$f"
             if [ ! -f "$src" ]; then
               echo "ERROR: expected smoke asset not found in repo: $f"
@@ -3314,7 +3316,7 @@ jobs:
 
   smoke-linux:
     name: "Smoke - Linux (${{ matrix.build }})"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [code-quality, prep-assets, build-linux-multilib]
     if: github.event_name == 'pull_request_target'
     timeout-minutes: 60
@@ -3339,7 +3341,6 @@ jobs:
       DECODER_PATH:     ${{ github.workspace }}/../test-sequences/TAppDecoder_gcc
       TEMP_DIR:         ${{ github.workspace }}/../x265_smoke/test_output/temp
       COREDUMP_DIR:     ${{ github.workspace }}/../x265_smoke/test_output/coredump
-      SMOKE_TESTS_FILE: ${{ github.workspace }}/../x265_smoke/smoke-tests.txt
 
     steps:
       - name: "Create directories"
@@ -3373,7 +3374,6 @@ jobs:
           extract "goldens-linux.tar.gz"  "$GOLDEN_DIR"
           extract "decoders-linux.tar.gz" "$TEST_SEQ_DIR"
           extract "conf.tar.gz"           "$SMOKE_DIR"
-          extract "smoke-tests.tar.gz"    "$SMOKE_DIR"
           chmod +x "$DECODER_PATH"
 
       - name: "Copy and configure conf.py into test-harness"
@@ -3440,7 +3440,7 @@ jobs:
         run: |
           cd "$HARNESS_DIR"
           echo "=== Starting smoke test for build: ${{ matrix.build }} (pre-built binary, --no-make) ==="
-          python3 smoke-test.py -b "${{ matrix.build }}" -t "$SMOKE_TESTS_FILE" --no-make --no-bench
+          python3 smoke-test.py -b "${{ matrix.build }}" --no-make --no-bench
           echo "[OK] Linux smoke test PASSED for ${{ matrix.build }}"
 
       - name: "Set log upload path"
@@ -3465,7 +3465,7 @@ jobs:
 
   smoke-windows:
     name: "Smoke - Windows (${{ matrix.build }})"
-    runs-on: windows-2022
+    runs-on: windows-2025
     needs: [code-quality, prep-assets, build-windows-multilib]
     if: github.event_name == 'pull_request_target'
     timeout-minutes: 60
@@ -3493,7 +3493,6 @@ jobs:
       DECODER_PATH:     ${{ github.workspace }}\..\test-sequences\TAppDecoder.exe
       TEMP_DIR:         ${{ github.workspace }}\..\x265_smoke\test_output\temp
       COREDUMP_DIR:     ${{ github.workspace }}\..\x265_smoke\test_output\coredump
-      SMOKE_TESTS_FILE: ${{ github.workspace }}\..\x265_smoke\smoke-tests.txt
 
     steps:
       - name: "Create directories"
@@ -3528,15 +3527,6 @@ jobs:
           extract "goldens-windows.tar.gz"  "$GOLDEN_DIR"
           extract "decoders-windows.tar.gz" "$TEST_SEQ_DIR"
           extract "conf.tar.gz"             "$SMOKE_DIR"
-          extract "smoke-tests.tar.gz"      "$SMOKE_DIR"
-
-      - name: "Find vcvarsall.bat"
-        run: |
-          VCVARS=$(find "C:/Program Files/Microsoft Visual Studio" \
-            -name "vcvarsall.bat" 2>/dev/null | head -1)
-          VCVARS_WIN=$(cygpath -m "$VCVARS")
-          echo "Found vcvarsall at: $VCVARS_WIN"
-          echo "VCVARSALL_PATH=$VCVARS_WIN" >> "$GITHUB_ENV"
 
       - name: "Copy and configure conf.py into test-harness"
         run: |
@@ -3548,21 +3538,6 @@ jobs:
           WIN_TEMP_DIR=$(cygpath -m "$TEMP_DIR")
           WIN_COREDUMP_DIR=$(cygpath -m "$COREDUMP_DIR")
           sed -i "s|my_machine_name.*=.*|my_machine_name      = 'github-runner'|" "$HARNESS_DIR/conf.py"
-          python3 - << 'EOF'
-          import re, os
-          conf   = os.environ['HARNESS_DIR'].replace('\\', '/') + '/conf.py'
-          vcvars = os.environ['VCVARSALL_PATH']
-          with open(conf, 'r', encoding='utf-8') as f:
-              content = f.read()
-          content = re.sub(
-              r'^(?!#)\s*my_vcvarsall\s*=.*$',
-              f"my_vcvarsall         = r'{vcvars}'",
-              content, flags=re.MULTILINE
-          )
-          with open(conf, 'w', encoding='utf-8') as f:
-              f.write(content)
-          print('[OK] vcvarsall path set to:', vcvars)
-          EOF
           sed -i "s|my_source.*=.*|my_source            = r'${WIN_X265_DIR}/source/'|"        "$HARNESS_DIR/conf.py"
           sed -i "s|my_sequences.*=.*|my_sequences         = r'${WIN_TEST_SEQ_DIR}'|"         "$HARNESS_DIR/conf.py"
           sed -i "s|my_goldens.*=.*|my_goldens           = r'${WIN_GOLDEN_DIR}'|"             "$HARNESS_DIR/conf.py"
@@ -3575,30 +3550,6 @@ jobs:
           sed -i "s|my_tempfolder.*=.*|my_tempfolder        = r'${WIN_TEMP_DIR}/'|"           "$HARNESS_DIR/conf.py"
           sed -i "s|my_coredumppath.*=.*|my_coredumppath      = r'${WIN_COREDUMP_DIR}/'|"     "$HARNESS_DIR/conf.py"
           echo "[OK] conf.py paths updated"
-
-      - name: "Patch utils.py vcpath and msbuild"
-        run: |
-          python3 - << 'EOF'
-          import os
-          utils      = os.environ['HARNESS_DIR'].replace('\\', '/') + '/utils.py'
-          vcvars_dir = os.path.dirname(os.environ['VCVARSALL_PATH'])
-          vs_root    = vcvars_dir.replace('/', '\\').split('VC\\Auxiliary\\Build')[0]
-          msbuild    = vs_root + r'MSBuild\Current\Bin\amd64\MSBuild.exe'
-          with open(utils, 'r', encoding='utf-8') as f:
-              content = f.read()
-          content = content.replace(
-              r"vcpath = r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build'",
-              f"vcpath = r'{vcvars_dir}'"
-          )
-          content = content.replace(
-              r"r'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe'",
-              f"r'{msbuild}'"
-          )
-          with open(utils, 'w', encoding='utf-8') as f:
-              f.write(content)
-          print('[OK] utils.py patched vcpath to:', vcvars_dir)
-          print('[OK] utils.py patched msbuild to:', msbuild)
-          EOF
 
       - name: "Checkout PR branch in x265"
         run: |
@@ -3637,8 +3588,7 @@ jobs:
         run: |
           cd "$HARNESS_DIR"
           echo "=== Starting smoke test for build: ${{ matrix.build }} (pre-built binary, --no-make) ==="
-          WIN_SMOKE_TESTS_FILE=$(cygpath -m "$SMOKE_TESTS_FILE")
-          python3 smoke-test.py -b "${{ matrix.build }}" -t "$WIN_SMOKE_TESTS_FILE" --no-make --no-bench
+          python3 smoke-test.py -b "${{ matrix.build }}" --no-make --no-bench
           echo "[OK] Windows smoke test PASSED for ${{ matrix.build }}"
 
       - name: "Set log upload path"

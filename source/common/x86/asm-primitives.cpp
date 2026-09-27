@@ -5511,7 +5511,7 @@ void PFX(intel_cpu_indicator_init)(void)
  * that backs up all the registers. */
 void __intel_cpu_indicator_init(void)
 {
-    PFX(intel_cpu_indicator_init)();
+    PFX(safe_intel_cpu_indicator_init)();
 }
 
 #else // ifdef __INTEL_COMPILER
