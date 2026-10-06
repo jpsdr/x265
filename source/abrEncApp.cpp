@@ -970,8 +970,11 @@ ret:
                     int numEncoded = api->encoder_encode(m_encoder, &p_nal, &nal, picInput, pic_recon);
 
                     int idx = (inFrameCount - 1) % m_parent->m_queueSize;
-                    m_parent->m_picIdxReadCnt[m_id][idx].incr();
-                    m_parent->m_picReadCnt[m_id].incr();
+                    if (inputNum == inputPicNum - 1)
+                    {
+                        m_parent->m_picIdxReadCnt[m_id][idx].incr();
+                        m_parent->m_picReadCnt[m_id].incr();
+                    }
                     if (m_cliopt.loadLevel && picInput)
                     {
                         m_parent->m_analysisReadCnt[m_cliopt.refId].incr();
