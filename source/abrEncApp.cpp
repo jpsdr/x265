@@ -830,12 +830,13 @@ ret:
 
                             if (pic_in[view]->framesize)
                             {
+                                bool bBff = m_param->interlaceMode == 2;
                                 for (int i = 0; i < x265_cli_csps[pic_in[view]->colorSpace].planes; i++)
                                 {
-                                    char* srcP1 = (char*)pic_in[view]->planes[i];
-                                    char* srcP2 = (char*)pic_in[view]->planes[i] + pic_in[view]->stride[i];
-                                    char* p1 = (char*)picField1.planes[i];
-                                    char* p2 = (char*)picField2.planes[i];
+                                    char* srcP1 = static_cast<char*>(pic_in[view]->planes[i]) + (bBff ? pic_in[view]->stride[i] : 0);
+                                    char* srcP2 = static_cast<char*>(pic_in[view]->planes[i]) + (bBff ? 0 : pic_in[view]->stride[i]);
+                                    char* p1 = static_cast<char*>(picField1.planes[i]);
+                                    char* p2 = static_cast<char*>(picField2.planes[i]);
 
                                     int stride = picField1.stride[i];
 
