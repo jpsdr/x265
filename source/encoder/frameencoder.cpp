@@ -804,19 +804,18 @@ void FrameEncoder::compressFrame(int layer)
         {
             if (m_param->interlaceMode > 0)
             {
+                // field_seq_flag is 1, so each picture is a single field: 1 = top field, 2 = bottom field
                 if( m_param->interlaceMode == 2 )
-                {   
-                    // m_picStruct should be set to 3 or 4 when field feature is enabled
+                {
                     if (m_param->bField)
-                        // 3: Top field, bottom field, in that order; 4: Bottom field, top field, in that order
-                        sei->m_picStruct = (slice->m_fieldNum == 1) ? 4 : 3;
+                        sei->m_picStruct = (slice->m_fieldNum == 1) ? 2 /* bottom */ : 1 /* top */;
                     else
                         sei->m_picStruct = (poc & 1) ? 1 /* top */ : 2 /* bottom */;
                 }     
                 else if (m_param->interlaceMode == 1)
                 {
                     if (m_param->bField)
-                        sei->m_picStruct = (slice->m_fieldNum == 1) ? 3: 4;
+                        sei->m_picStruct = (slice->m_fieldNum == 1) ? 1 /* top */ : 2 /* bottom */;
                     else
                         sei->m_picStruct = (poc & 1) ? 2 /* bottom */ : 1 /* top */;
                 }
