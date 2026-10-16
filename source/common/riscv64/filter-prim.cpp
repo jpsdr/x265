@@ -841,6 +841,9 @@ void interp8_vert_sp_rvv(const int16_t *src, intptr_t srcStride, pixel *dst,
         src += vl;
         dst += vl;
     }
+
+    /* vnclip uses vxrm=RDN; restore the default mode for later primitives. */
+    asm volatile("csrwi vxrm, 0");
 }
 
 template<bool coeff4, int width, int height>
@@ -933,6 +936,9 @@ void interp4_vert_sp_rvv(const int16_t *src, intptr_t srcStride, uint8_t *dst,
         src += vl;
         dst += vl;
     }
+
+    /* vnclip uses vxrm=RDN; restore the default mode for later primitives. */
+    asm volatile("csrwi vxrm, 0");
 }
 
 template<int N, int width, int height>
@@ -1027,6 +1033,9 @@ void interp8_vert_ss_rvv(const int16_t *src, intptr_t srcStride, int16_t *dst,
         src += vl;
         dst += vl;
     }
+
+    /* vnclip uses vxrm=RDN; restore the default mode for later primitives. */
+    asm volatile("csrwi vxrm, 0");
 }
 
 template<bool coeff4, int width, int height>
@@ -1098,6 +1107,9 @@ void interp4_vert_ss_rvv(const int16_t *src, intptr_t srcStride, int16_t *dst,
         src += vl;
         dst += vl;
     }
+
+    /* vnclip uses vxrm=RDN; restore the default mode for later primitives. */
+    asm volatile("csrwi vxrm, 0");
 }
 
 template<int N, int width, int height>
