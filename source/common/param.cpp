@@ -2070,11 +2070,6 @@ int x265_check_params(x265_param* param)
         if (param->dolbyProfile == 81)
             CHECK(param->masteringDisplayColorVolume[0] == 0, "Dolby Vision profile - 8.1 requires Mastering display color volume information\n");
     }
-    if (param->bField && param->interlaceMode)
-    {
-        CHECK( (param->bFrameAdaptive==0), "Adaptive B-frame decision method should be closed for field feature.\n" );
-        // to do
-    }
     CHECK(param->selectiveSAO < 0 || param->selectiveSAO > 4,
         "Invalid SAO tune level. Value must be between 0 and 4 (inclusive)");
     if (param->bEnableSceneCutAwareQp)
@@ -2391,7 +2386,7 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->numViews > 1, "multi-view");
 #endif
 #if ENABLE_HDR10_PLUS
-    TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
+    TOOLOPT(strlen(param->toneMapFile), "dhdr10-info");
 #endif
     if(param->bEnableTemporalFilter)
     {
