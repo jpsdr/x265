@@ -78,7 +78,7 @@ namespace X265_NS {
         H0("\nInput Options:\n");
         H0("   --input <filename>            %sRaw YUV or Y4M input file name. `-` for stdin\n", x265_extra_readers.c_str());
         H1("   --y4m                         Force parsing of input stream as YUV4MPEG2 regardless of file extension\n");
-        H0("   --fps <float|rational>        Source frame rate (float or num/denom), auto-detected if Y4M\n");
+        H0("   --fps <float|rational>        Source frame rate (float or num/denom), auto-detected if Y4M. Defines the bitstream timescale.\n");
         H0("   --input-res WxH               Source picture size [w x h], auto-detected if Y4M\n");
         H1("   --input-depth <integer>       Bit-depth of input file. Default 8\n");
         H1("   --input-csp <string>          Chroma subsampling, auto-detected if Y4M\n");
@@ -435,7 +435,11 @@ namespace X265_NS {
         H0("                                   - 5: temporal interleaving - alternate frames are the left and right views. The first encoded picture is the left view\n");
         H0("                                   An odd --seek swaps the views. With --interlace both fields of a frame belong to the same view\n");
         H0("                                   With --frame-dup the view follows the input picture, so a dropped duplicate does not swap the views\n");
-        H0("   --pic-struct <integer>        Set the picture structure and emit it in the picture timing SEI message. Values in the range 0..12. See D.3.3 of the HEVC spec. for a detailed explanation.\n");
+        H0("   --pic-struct <integer>        Specify a unique picture structure to emit in every frames' picture timing SEI message. Values in the range 0..12. See D.3.3 of the HEVC spec. for a detailed explanation.\n");
+        H0("   --psfile <filename>           PicStruct file specifying the picture structure for some or all frames.\n");
+        H0("                                 Format of each line: framenum ffo picstruct.\n");
+        H0("                                 ffo is the frame field order (0: progressive, 1: bff, 2: tff) and shall match the encode settings.\n");
+        H0("                                 picstruct value, from H.265 Table D.2 enumeration, shall be compatible with the encode settings.\n");
         H0("   --log2-max-poc-lsb <integer>  Maximum of the picture order count\n");
         H0("   --[no-]vui-timing-info        Emit VUI timing information in the bitstream. Default %s\n", OPT(param->bEmitVUITimingInfo));
         H0("   --[no-]vui-hrd-info           Emit VUI HRD information in the bitstream. Default %s\n", OPT(param->bEmitVUIHRDInfo));
@@ -528,6 +532,9 @@ namespace X265_NS {
                 recon[i]->release();
             recon[i] = NULL;
         }
+        if (psfile)
+            fclose(psfile);
+        psfile = NULL;
         if (qpfile)
             fclose(qpfile);
         qpfile = NULL;
@@ -886,6 +893,12 @@ namespace X265_NS {
                 OPT("recon-y4m-exec") reconPlayCmd = optarg;
                 OPT("reader-options") this->readerOpts = optarg;
                 OPT("svt")    /* handled above */;
+                OPT("psfile")
+                {
+                    this->psfile = x265_fopen(optarg, "rb");
+                    if (!this->psfile)
+                        x265_log_file(param, X265_LOG_ERROR, "%s psfile not found or error in opening ps file\n", optarg);
+                }
                 OPT("qpfile")
                 {
                     this->qpfile = x265_fopen(optarg, "rb");
@@ -1005,6 +1018,11 @@ namespace X265_NS {
         if (param->internalBitDepth != api->bit_depth)
         {
             x265_log(param, X265_LOG_ERROR, "Only bit depths of %d are supported in this build\n", api->bit_depth);
+            return true;
+        }
+
+        if (!!psfile && checkParamsWithPSFile(param))
+        {
             return true;
         }
 
@@ -1205,6 +1223,102 @@ namespace X265_NS {
             }
         }
         return false;
+    }
+
+    bool CLIOptions::checkParamsWithPSFile(const x265_param* globalParam)
+    {
+        if (!globalParam->bEmitHRDSEI)
+        {
+            x265_log(param, X265_LOG_ERROR, "psfile requires --hrd.\n");
+            return true;
+        }
+        if (globalParam->bEnableTemporalSubLayers)
+        {
+            x265_log(param, X265_LOG_ERROR, "Cannot use a psfile with temporal sublayers.\n");
+            return true;
+        }
+        if (globalParam->interlaceMode)
+        {
+            /* not supported: the encoder must check the field complementary of every frame (field) num.
+             * Only framefieldcoding is useful in interlacing: it can be written to the frame's PicTiming
+             * SEI source_scan_type to aid a decoder to select between deinterlacing or weaving fields. */
+            x265_log(param, X265_LOG_ERROR, "psfile with interlacing not yet supported.\n");
+            return true;
+        }
+        if (globalParam->pictureStructure >= 0)
+        {
+            x265_log(param, X265_LOG_ERROR, "psfile incompatible with user pic-struct.\n");
+            return true;
+        }
+        return false;
+    }
+
+    bool CLIOptions::parsePSFile(x265_picture &pic_org, int interlaceMode)
+    {
+        /* field_seq_flag == 0 or 1
+         * progressive: 0x181: single, doubling, tripling
+         * interlaced: 0x1e06: top, bottom, and the prev/next pairings
+         * note: 0x78 (TB, BT, TBT, BTB) is currently rejected */
+        const uint32_t validPicStructMask = !interlaceMode ? 0x181 : 0x1e06;
+
+        pic_org.picStruct = PIC_STRUCT_AUTO;
+
+        char buff[384];
+        while (1)
+        {
+            uint32_t filePos = ftell(psfile);
+            if (!fgets(buff, sizeof(buff), psfile))
+                return 1;
+
+            if (!strchr(buff, '\n') && !feof(psfile))
+            {
+                int c;
+                while ((c = fgetc(psfile)) != '\0')
+                {
+                    if (c == '\n' || c == EOF)
+                        break;
+                }
+            }
+
+            int32_t num;
+            uint32_t frameFieldCoding, pictureStructure;
+
+            if (sscanf(buff, "%d %u %u", &num, &frameFieldCoding, &pictureStructure) != 3)
+                continue;
+
+            if (num > pic_org.poc)
+            {
+                /* restore as the frame is ahead */
+                fseek(psfile, filePos, SEEK_SET);
+                break;
+            }
+            if (num < pic_org.poc)
+                continue;
+            if (pictureStructure < PIC_STRUCT_COUNT)
+            {
+#define FFO_STR(interlaced) ((interlaced > 0) ? "interlaced" : "progressive")
+                /* todo: report the frame field coding in the PicTiming SEI source_scan_type.
+                 * Progressive can only be progressive encoding, but interlaced could change
+                 * from pure interlaced to segmented frames. */
+                if ((frameFieldCoding > 0) ^ (interlaceMode > 0))
+                    x265_log(NULL, X265_LOG_WARNING, "Ignored structure for pic %d: its scan type (%s) mismatch the configuration (%s).\n",
+                             num, FFO_STR(frameFieldCoding), FFO_STR(interlaceMode));
+                else if ((1 << pictureStructure) & validPicStructMask)
+                    pic_org.picStruct = pictureStructure;
+                else
+                    x265_log(NULL, X265_LOG_WARNING, "Ignored structure for pic %d: not compatible with %s.\n",
+                             num, FFO_STR(interlaceMode));
+                return 1;
+#undef FFO_STR
+            }
+            else
+            {
+                x265_log(NULL, X265_LOG_WARNING, "Ignored invalid picture structure %u for pic %d.", pictureStructure, num);
+                return 1;
+            }
+        }
+        /* default */
+        return 1;
     }
 
     bool CLIOptions::parseQPFile(x265_picture &pic_org)
