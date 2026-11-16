@@ -2369,6 +2369,12 @@ void Lookahead::slicetypeDecide()
                     m_lastKeyframe = displayPicCount;
                     m_lastKeyframeNum = frm.frameNum;
                     frm.bKeyframe = true;
+                    /* remove RASLs, BD gop length constraints both coding and display counts */
+                    if (m_param->uhdBluray)
+                    {
+                        m_lastKeyframe -= (displayPicCount - list[0]->m_displayPicCount);
+                        m_lastKeyframeNum -= bframes;
+                    }
                 }
                 else
                     frm.sliceType = X265_TYPE_IDR;
@@ -2437,6 +2443,12 @@ void Lookahead::slicetypeDecide()
                 m_lastKeyframe = list[bframes]->m_displayPicCount;
                 m_lastKeyframeNum = frm.frameNum;
                 frm.bKeyframe = true;
+                /* remove RASLs, BD gop length constraints both coding and display counts */
+                if (m_param->uhdBluray && m_param->bOpenGOP)
+                {
+                    m_lastKeyframe -= (list[bframes]->m_displayPicCount - list[0]->m_displayPicCount);
+                    m_lastKeyframeNum -= bframes;
+                }
             }
             if (!IS_X265_TYPE_B(frm.sliceType))
                 break;

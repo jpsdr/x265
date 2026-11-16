@@ -45,7 +45,8 @@ public:
     uint32_t  m_psyScaleFix8_B;
     uint32_t  m_psyScaleFix8_P;
     uint32_t  m_psyScaleFix8_I;
-    int       m_qp; /* QP used to configure lambda, may be higher than QP_MAX_SPEC but <= QP_MAX_MAX */
+    bool      m_bChromaDistWeight; /* weight chroma distortion by the luma/chroma QP gap */
+     int       m_qp; /* QP used to configure lambda, may be higher than QP_MAX_SPEC but <= QP_MAX_MAX */
 
     void setPsyRdScale(double scale)                { m_psyRdBase = (uint32_t)floor(65536.0 * scale * 0.33); }
     void setSsimRd(int ssimRd) { m_ssimRd = ssimRd; };
@@ -55,6 +56,7 @@ public:
         m_psyScaleFix8_P = P;
         m_psyScaleFix8_I = I;
     }
+    void setChromaDistWeight(bool bEnable)          { m_bChromaDistWeight = bEnable; }
 
     void setQP(const Slice& slice, int qp)
     {
@@ -86,13 +88,18 @@ public:
             qpCr = x265_clip3(QP_MIN, QP_MAX_SPEC, qp + slice.m_pps->chromaQpOffset[1] + slice.m_chromaQpOffset[1]);
         }
 
-        int chroma_offset_idx = X265_MIN(qp - qpCb + 12, MAX_CHROMA_LAMBDA_OFFSET);
-        uint16_t lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
-        m_chromaDistWeight[0] = lambdaOffset;
+        if (m_bChromaDistWeight)
+        {
+            int chroma_offset_idx = X265_MIN(qp - qpCb + 12, MAX_CHROMA_LAMBDA_OFFSET);
+            uint16_t lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
+            m_chromaDistWeight[0] = lambdaOffset;
 
-        chroma_offset_idx = X265_MIN(qp - qpCr + 12, MAX_CHROMA_LAMBDA_OFFSET);
-        lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
-        m_chromaDistWeight[1] = lambdaOffset;
+            chroma_offset_idx = X265_MIN(qp - qpCr + 12, MAX_CHROMA_LAMBDA_OFFSET);
+            lambdaOffset = x265_chroma_lambda2_offset_tab[chroma_offset_idx];
+            m_chromaDistWeight[1] = lambdaOffset;
+        }
+        else
+            m_chromaDistWeight[0] = m_chromaDistWeight[1] = 256;
     }
 
     void setLambda(double lambda2, double lambda)
