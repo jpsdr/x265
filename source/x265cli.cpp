@@ -130,6 +130,8 @@ namespace X265_NS {
         H0("   --[no-]pmode                  Parallel mode analysis. Deprecated from release 4.1. Default %s\n", OPT(param->bDistributeModeAnalysis));
         H0("   --[no-]pme                    Parallel motion estimation. Deprecated from release 4.1. Default %s\n", OPT(param->bDistributeMotionEstimation));
         H0("   --[no-]threaded-me            Enables standalone multi-threaded module for motion estimation at CTU level. Default %s\n", OPT(param->bThreadedME));
+        H0("   --[no-]ml-ctu-pred            Enable ML based CTU partition prediction on I-frames. Default %s\n", OPT(param->bEnableMLCTUPred));
+        H1("   --ml-model-dir <dir>          Directory containing the ML CTU partition prediction models. Default: auto\n");
         H0("   --[no-]asm <bool|int|string>  Override CPU detection. Default: auto\n");
         H0("\nPresets:\n");
         H0("-p/--preset <string>             Trade off performance for compression efficiency. Default medium\n");
@@ -228,7 +230,8 @@ namespace X265_NS {
         H0("-b/--bframes <0..16>             Maximum number of consecutive b-frames. Default %d\n", param->bframes);
         H1("   --bframe-bias <integer>       Bias towards B frame decisions. Default %d\n", param->bFrameBias);
         H0("   --b-adapt <0..2>              0 - none, 1 - fast, 2 - full (trellis) adaptive B frame scheduling. Default %d\n", param->bFrameAdaptive);
-        H0("   --[no-]b-pyramid              Use B-frames as references. Default %s\n", OPT(param->bBPyramid));
+        H0("   --b-pyramid <0..2>            Use B-frames as references. 0 - none, 1 - normal, 2 - hierarchical. Default %d\n", param->bBPyramid);
+        H1("   --b-pyramid-qp-scale <float>  Scale the QP offsets of the B-pyramid layers, 0 to 2. Default %.2f\n", param->bPyramidQpScale);
         H1("   --qpfile <string>             Force frametypes and QPs for some or all frames\n");
         H1("                                 Format of each line: framenumber frametype QP\n");
         H1("                                 QP is optional (none lets x265 choose). Frametypes: I,i,K,P,B,b.\n");

@@ -200,6 +200,7 @@ void x265_param_default(x265_param* param)
     param->lookaheadDepth = 20;
     param->bFrameAdaptive = X265_B_ADAPT_TRELLIS;
     param->bBPyramid = 1;
+    param->bPyramidQpScale = 1.0;
     param->scenecutThreshold = 40; /* Magic number pulled in from x264 */
     param->bHistBasedSceneCut = 0;
     param->lookaheadSlices = 8;
@@ -419,6 +420,10 @@ void x265_param_default(x265_param* param)
     param->bCopyPicToFrame = 1;
     param->maxAUSizeFactor = 1;
     param->naluFile[0] = 0;
+
+    /* ML CTU partition prediction */
+    param->bEnableMLCTUPred = 0;
+    param->mlModelDir[0] = 0;
 
     /* DCT Approximations */
     param->bLowPassDct = 0;
@@ -1215,7 +1220,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     OPT("hash") p->decodedPictureHashSEI = atoi(value);
     OPT("aud") p->bEnableAccessUnitDelimiters = atobool(value);
     OPT("info") p->bEmitInfoSEI = atobool(value);
-    OPT("b-pyramid") p->bBPyramid = atobool(value);
+    OPT("b-pyramid") p->bBPyramid = atoi(value);
     OPT("hrd") p->bEmitHRDSEI = atobool(value);
     OPT2("ipratio", "ip-factor") p->rc.ipFactor = atof(value);
     OPT2("pbratio", "pb-factor") p->rc.pbFactor = atof(value);
@@ -1390,6 +1395,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("uhd-bd") p->uhdBluray = atobool(value);
 
         OPT("csv") snprintf(p->csvfn, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("b-pyramid-qp-scale") p->bPyramidQpScale = atof(value);
         OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value);
         OPT("log-file-level")
@@ -1644,6 +1650,8 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("fovea-delta") p->foveaDelta = (float)atof(value);
         OPT("fovea-sigma") p->foveaSigma = (float)atof(value);
         OPT("fovea-gaze-file") p->foveaGazeFile = strdup(value);
+        OPT("ml-ctu-pred") p->bEnableMLCTUPred = atobool(value);
+        OPT("ml-model-dir") snprintf(p->mlModelDir, X265_MAX_STRING_SIZE, "%s", value);
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -1992,6 +2000,8 @@ int x265_check_params(x265_param* param)
           "Valid quality based range: -qpBDOffsetY to 51");
     CHECK(param->bFrameAdaptive < 0 || param->bFrameAdaptive > 2,
           "Valid adaptive b scheduling values 0 - none, 1 - fast, 2 - full");
+    CHECK(param->bBPyramid < X265_B_PYRAMID_NONE || param->bBPyramid > X265_B_PYRAMID_HIERARCHICAL,
+          "Valid b-pyramid values 0 - none, 1 - normal, 2 - hierarchical");
     CHECK(param->logLevel<-1 || param->logLevel> X265_LOG_FULL,
           "Valid Logging level -1:none 0:error 1:warning 2:info 3:debug 4:full");
     CHECK(param->scenecutThreshold < 0,
@@ -2031,6 +2041,8 @@ int x265_check_params(x265_param* param)
           "Target bitrate can not be less than zero");
     CHECK(param->rc.qCompress < 0.5 || param->rc.qCompress > 1.0,
           "qCompress must be between 0.5 and 1.0");
+    CHECK(param->bPyramidQpScale < 0 || param->bPyramidQpScale > 2.0,
+          "b-pyramid-qp-scale must be between 0 and 2");
     CHECK(param->rc.cuTree && (param->rc.cuTreeStrength < 0.0 || param->rc.cuTreeStrength > 3.0),
           "cuTreeStrength must be between 0.0 and 3.0");
     CHECK(param->rc.cuTreeMinQpOffset < -QP_MAX_MAX || param->rc.cuTreeMinQpOffset > QP_MIN,
@@ -2364,6 +2376,11 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->bEnableConstrainedIntra, "cip");
     TOOLOPT(param->bIntraInBFrames, "b-intra");
     TOOLOPT(param->bEnableFastIntra, "fast-intra");
+    if (param->bBPyramid == X265_B_PYRAMID_HIERARCHICAL && param->bPyramidQpScale != 1.0)
+    {
+        snprintf(tmp, sizeof(tmp), "b-pyramid-qp-scale=%.2f", param->bPyramidQpScale);
+        appendtool(param, buf, sizeof(buf), tmp);
+    }
     TOOLOPT(param->bEnableStrongIntraSmoothing, "strong-intra-smoothing");
     TOOLVAL(param->lookaheadSlices, "lslices=%d");
     TOOLVAL(param->lookaheadThreads, "lthreads=%d")
@@ -2472,7 +2489,14 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), " gop-lookahead=%d", p->gopLookahead);
     s += snprintf(s, bufSize - (s - buf), " bframes=%d", p->bframes);
     s += snprintf(s, bufSize - (s - buf), " b-adapt=%d", p->bFrameAdaptive);
-    BOOL(p->bBPyramid, "b-pyramid");
+    /* 0 and 1 keep the boolean form of the earlier option */
+    if (p->bBPyramid == X265_B_PYRAMID_HIERARCHICAL)
+    {
+        s += snprintf(s, bufSize - (s - buf), " b-pyramid=%d", p->bBPyramid);
+        s += snprintf(s, bufSize - (s - buf), " b-pyramid-qp-scale=%.2f", p->bPyramidQpScale);
+    }
+    else
+        BOOL(p->bBPyramid, "b-pyramid");
     s += snprintf(s, bufSize - (s - buf), " bframe-bias=%d", p->bFrameBias);
     s += snprintf(s, bufSize - (s - buf), " rc-lookahead=%d", p->lookaheadDepth);
     s += snprintf(s, bufSize - (s - buf), " lookahead-slices=%d", p->lookaheadSlices);
@@ -2533,6 +2557,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     BOOL(p->bEnableTSkipFast, "tskip-fast");
     BOOL(p->bCULossless, "cu-lossless");
     BOOL(p->bIntraInBFrames, "b-intra");
+    BOOL(p->bEnableMLCTUPred, "ml-ctu-pred");
     BOOL(p->bEnableSplitRdSkip, "splitrd-skip");
     s += snprintf(s, bufSize - (s - buf), " rdpenalty=%d", p->rdPenalty);
     s += snprintf(s, bufSize - (s - buf), " psy-rd=%.2f", p->psyRd);
@@ -2980,6 +3005,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bFrameAdaptive = src->bFrameAdaptive;
     dst->bFrameBias = src->bFrameBias;
     dst->bBPyramid = src->bBPyramid;
+    dst->bPyramidQpScale = src->bPyramidQpScale;
     dst->lookaheadDepth = src->lookaheadDepth;
     dst->lookaheadSlices = src->lookaheadSlices;
     dst->lookaheadThreads = src->lookaheadThreads;
@@ -3213,6 +3239,8 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->vbvBufferEnd = src->vbvBufferEnd;
     dst->vbvEndFrameAdjust = src->vbvEndFrameAdjust;
     dst->bAnalysisType = src->bAnalysisType;
+    dst->bEnableMLCTUPred = src->bEnableMLCTUPred;
+    snprintf(dst->mlModelDir, X265_MAX_STRING_SIZE, "%s", src->mlModelDir);
     dst->bCopyPicToFrame = src->bCopyPicToFrame;
     if (strlen(src->analysisSave)) snprintf(dst->analysisSave, X265_MAX_STRING_SIZE, "%s", src->analysisSave);
     else dst->analysisSave[0] = 0;

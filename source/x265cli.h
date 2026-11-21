@@ -161,8 +161,8 @@ static const struct option long_options[] =
     { "bframe-bias",    required_argument, NULL, 0 },
     { "b-adapt",        required_argument, NULL, 0 },
     { "no-b-adapt",           no_argument, NULL, 0 },
-    { "no-b-pyramid",         no_argument, NULL, 0 },
-    { "b-pyramid",            no_argument, NULL, 0 },
+    { "b-pyramid",      required_argument, NULL, 0 },
+    { "b-pyramid-qp-scale", required_argument, NULL, 0 },
     { "ref",            required_argument, NULL, 0 },
     { "limit-refs",     required_argument, NULL, 0 },
     { "no-limit-modes",       no_argument, NULL, 0 },
@@ -431,6 +431,9 @@ static const struct option long_options[] =
     { "fovea-delta",     required_argument, NULL, 0 },
     { "fovea-sigma",     required_argument, NULL, 0 },
     { "fovea-gaze-file", required_argument, NULL, 0 },
+    { "ml-ctu-pred",          no_argument, NULL, 0 },
+    { "no-ml-ctu-pred",       no_argument, NULL, 0 },
+    { "ml-model-dir",   required_argument, NULL, 0 },
     { 0, 0, 0, 0 }
 };
 
