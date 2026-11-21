@@ -994,7 +994,7 @@ void RateControl::initHRD(SPS& sps)
 
     // Init HRD
     HRDInfo* hrd = &sps.vuiParameters.hrdParameters;
-    hrd->cbrFlag = m_isCbr;
+    hrd->cbrFlag = m_isCbr && m_param->rc.bStrictCbr;
     if (m_param->reconfigWindowSize) {
         hrd->cbrFlag = 0;
         vbvMaxBitrate = m_param->decoderVbvMaxRate * 1000;
@@ -3446,8 +3446,10 @@ int RateControl::updateVbv(int64_t bits, RateControlEntry* rce)
     {
         if (m_bufferFillFinal > m_bufferSize)
         {
-            filler = (int)(m_bufferFillFinal - m_bufferSize);
-            filler += FILLER_OVERHEAD * 8;
+            /* FD unit is a whole count of bytes, round up */
+            filler = (int)ceil(m_bufferFillFinal - m_bufferSize);
+            filler = (filler + 7) / 8;
+            filler = (filler + FILLER_OVERHEAD) * 8;
         }
         m_bufferFillFinal = double(m_bufferFillFinal) - filler;
         bufferBits = X265_MIN(bits + filler + m_bufferExcess, bufferFillThisAU);
