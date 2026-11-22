@@ -48,6 +48,8 @@ struct InputFileInfo
     int sarWidth;
     int sarHeight;
     int frameCount;
+    int timebaseNum;
+    int timebaseDenom;
 
     /* user supplied */
     int skipFrames;
