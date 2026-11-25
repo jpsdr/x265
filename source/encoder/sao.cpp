@@ -712,7 +712,7 @@ void SAO::generateChromaOffsets(SaoCtuParam* ctuParam[3], int idxY, int idxX)
                 int offset[NUM_EDGETYPE];
                 offset[0] = 0;
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    m_offsetBo[2][((ctuParam[2][addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(((uint8_t)ctuParam[2][addr].offset[i]) << SAO_BIT_INC);
+                    offset[i + 1] = (int)(((uint8_t)ctuParam[2][addr].offset[i]) << SAO_BIT_INC);
 
                 for (int edgeType = 0; edgeType < NUM_EDGETYPE; edgeType++)
                     m_offsetEo[2][edgeType] = (int8_t)offset[s_eoTable[edgeType]];
