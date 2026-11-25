@@ -357,7 +357,7 @@ void x265_param_default(x265_param* param)
     param->rc.AQAuto_hdr = false;
     param->decoderVbvMaxRate = 0;
     param->bliveVBV2pass = 0;
-    param->rc.cuTreeStrength = (param->rc.hevcAq ? 6.0 : 5.0) * (1.0 - param->rc.qCompress);
+    param->rc.cuTreeStrength = -1.0;
     param->rc.cuTreeMinQpOffset = -QP_MAX_MAX;
     param->rc.cuTreeMaxQpOffset = QP_MAX_MAX;
 
@@ -1228,11 +1228,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     OPT2("ipratio", "ip-factor") p->rc.ipFactor = atof(value);
     OPT2("pbratio", "pb-factor") p->rc.pbFactor = atof(value);
     OPT("hevc-aq") p->rc.hevcAq = atobool(value);
-    OPT("qcomp") {
-        double qCompress = atof(value);
-        p->rc.qCompress = qCompress;
-        p->rc.cuTreeStrength = (p->rc.hevcAq ? 6.0 : 5.0) * (1.0 - qCompress);
-    }
+    OPT("qcomp") p->rc.qCompress = atof(value);
     OPT("cutree-strength") p->rc.cuTreeStrength = atof(value);
     OPT("cutree-minqpoffs") p->rc.cuTreeMinQpOffset = atof(value);
     OPT("cutree-maxqpoffs") p->rc.cuTreeMaxQpOffset = atof(value);
@@ -2047,8 +2043,8 @@ int x265_check_params(x265_param* param)
           "qCompress must be between 0.5 and 1.0");
     CHECK(param->bPyramidQpScale < 0 || param->bPyramidQpScale > 2.0,
           "b-pyramid-qp-scale must be between 0 and 2");
-    CHECK(param->rc.cuTree && (param->rc.cuTreeStrength < 0.0 || param->rc.cuTreeStrength > 3.0),
-          "cuTreeStrength must be between 0.0 and 3.0");
+    CHECK(param->rc.cuTree && (param->rc.cuTreeStrength != -1.0 && !(param->rc.cuTreeStrength >= 0.0 && param->rc.cuTreeStrength <= 3.0)),
+          "cuTreeStrength must be -1 (auto) or between 0.0 and 3.0");
     CHECK(param->rc.cuTreeMinQpOffset < -QP_MAX_MAX || param->rc.cuTreeMinQpOffset > QP_MIN,
           "cuTreeMinQpOffset exceeds supported range (-69 to 0)");
     CHECK(param->rc.cuTreeMaxQpOffset < QP_MIN || param->rc.cuTreeMaxQpOffset > QP_MAX_MAX,
@@ -2629,7 +2625,8 @@ char *x265_param2string(x265_param* p, int padx, int pady)
 	s += snprintf(s, bufSize - (s - buf), " limit-aq1-strength=%.2f", p->rc.limitAq1Strength);
     BOOL(p->rc.aqFastEdge, "aq-fast-edge");
     BOOL(p->rc.cuTree, "cutree");
-    s += snprintf(s, bufSize - (s - buf), " cutree-strength=%.2f", p->rc.cuTreeStrength);
+    s += snprintf(s, bufSize - (s - buf), " cutree-strength=%.2f",
+        p->rc.cuTreeStrength == -1.0 ? (p->rc.hevcAq ? 6.0 : 5.0) * (1.0 - p->rc.qCompress) : p->rc.cuTreeStrength);
     s += snprintf(s, bufSize - (s - buf), " cutree-minqpoffs=%.2f", p->rc.cuTreeMinQpOffset);
     s += snprintf(s, bufSize - (s - buf), " cutree-maxqpoffs=%.2f", p->rc.cuTreeMaxQpOffset);
     s += snprintf(s, bufSize - (s - buf), " zone-count=%d", p->rc.zoneCount);

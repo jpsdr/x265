@@ -1762,7 +1762,7 @@ typedef struct x265_param
          * Default value is 0.6. Increasing it to 1 will effectively generate CQP */
         double    qCompress;
 
-        /* Weight given to cutree Adaptive Quantization (0 to 3.0). By default, it is calculated from
+        /* Weight given to cutree Adaptive Quantization (0 to 3.0). Default -1 means automatic, calculated from
          * qCompress and weights differently when hevc-aq is enabled/disabled
          * - hevc-aq enabled:   6.0 * (1.0 - qcomp)
          * - hevc-aq disabled:  5.0 * (1.0 - qcomp)                            */

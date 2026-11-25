@@ -329,7 +329,7 @@ namespace X265_NS {
         H1("   --ipratio <float>             QP factor between I and P. Default %.2f\n", param->rc.ipFactor);
         H1("   --pbratio <float>             QP factor between P and B. Default %.2f\n", param->rc.pbFactor);
         H1("   --qcomp <float>               Weight given to predicted complexity. Default %.2f\n", param->rc.qCompress);
-        H1("   --cutree-strength <float>     Overrides the strength of cutree Adaptive Quantization. Default is unset (calculated from --qcomp):\n"
+        H1("   --cutree-strength <float>     Overrides the strength of cutree Adaptive Quantization. Default -1 (calculated from --qcomp):\n"
            "                                 - hevc-aq enabled:   6.0 * (1.0 - qcomp)\n"
            "                                 - hevc-aq disabled:  5.0 * (1.0 - qcomp)\n");
         H1("   --cutree-minqpoffs <float>    sets a hard lower limit on QP offset (-69 to 0 ) allowed for cutree Adaptive Quantization. Default is %.2f (not limited)\n", param->rc.cuTreeMinQpOffset);
