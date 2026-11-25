@@ -34,6 +34,7 @@
 #include "picyuv.h"
 
 #include "encoder.h"
+#include "frameencoder.h"
 #include "slicetype.h"
 #include "ratecontrol.h"
 #include "sei.h"
@@ -1519,13 +1520,14 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
 
     if (m_param->bEnableSBRC)
     {
-        if (rce->poc == 0 || (m_framesDone % m_param->keyframeMax == 0))
+        if (rce->encodeOrder % m_param->keyframeMax == 0)
         {
             //Reset SBRC buffer
             m_encodedSegmentBits = 0;
             m_segDur = 0;
             m_iBits = 0;
-            m_totalframesInSegment = m_param->totalFrames - m_framesDone;
+            m_totalframesInSegment = m_param->totalFrames > 0 ?
+                X265_MIN(m_param->keyframeMax, m_param->totalFrames - rce->encodeOrder) : m_param->keyframeMax;
 
             for (int i = 0; i < 3; i++)
             {
@@ -2944,16 +2946,29 @@ double RateControl::predictSize(Predictor *p, double q, double var)
 
 double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
 {
-    int depth = 0;
-    int framesDoneInSeg = m_framesDone % m_param->keyframeMax;
-    if (framesDoneInSeg + m_param->lookaheadDepth <= m_param->keyframeMax)
-        depth = m_param->lookaheadDepth;
-    else
-        depth = m_param->keyframeMax - framesDoneInSeg;
+    const int segment = curFrame->m_encodeOrder / m_param->keyframeMax;
+    const int framesDoneInSeg = curFrame->m_encodeOrder % m_param->keyframeMax;
+    const int segmentFrames = X265_MAX(framesDoneInSeg + 1, m_totalframesInSegment);
+    const int depth = X265_MIN(m_param->lookaheadDepth, segmentFrames - framesDoneInSeg - 1);
+    double pendingBits = 0;
+    double pendingDuration = 0;
+    bool hasIFrame = m_iBits != 0;
+    for (int i = 0; i < m_param->frameNumThreads; i++)
+    {
+        const RateControlEntry& entry = m_top->m_frameEncoder[i]->m_rce;
+        if (entry.isActive && entry.encodeOrder < curFrame->m_encodeOrder &&
+            entry.encodeOrder / m_param->keyframeMax == segment)
+        {
+            pendingBits += entry.frameSizePlanned;
+            pendingDuration += entry.cpbDuration * m_timebase;
+            hasIFrame |= entry.sliceType == I_SLICE;
+        }
+    }
+    const double currentDuration = curFrame->m_cpbDuration * m_timebase;
     for (int iterations = 0; iterations < 1000; iterations++)
     {
-        double totalDuration = m_segDur;
-        double frameBitsTotal = m_encodedSegmentBits + predictSize(&m_pred[m_predType], q, (double)m_currentSatd);
+        double totalDuration = m_segDur + pendingDuration + currentDuration;
+        double frameBitsTotal = m_encodedSegmentBits + pendingBits + predictSize(&m_pred[m_predType], q, (double)m_currentSatd);
         double lookaheadBits = 0;
         double lookaheadDur = 0;
         for (int i = 0; i < depth; i++)
@@ -2971,22 +2986,25 @@ double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
             totalDuration += curFrame->m_lowres.plannedCpbDuration[i];
         }
         //Check for segment buffer overflow and adjust QP accordingly
-        double segDur = m_param->keyframeMax * m_timebase;
+        double segDur = segmentFrames * m_timebase;
         double allowedSize = m_vbvMaxRate * segDur;
-        double remDur = segDur - totalDuration;
-        double remainingBits = frameBitsTotal;
+        double remDur = X265_MAX(0.0, segDur - totalDuration);
+        double remainingBits = 0;
         int isLastSegmentInaEncode = m_totalframesInSegment < m_param->keyframeMax;
-        remainingBits = lookaheadBits / lookaheadDur * remDur;
+        if (lookaheadDur > 0)
+            remainingBits = lookaheadBits / lookaheadDur * remDur;
+        else if (currentDuration > 0)
+            remainingBits = predictSize(&m_pred[m_predType], q, (double)m_currentSatd) / currentDuration * remDur;
 
 		//Reduce over estimation due to I frame size
-        if (m_iBits == 0)
+        if (!hasIFrame)
         {
             //Compute number of I frames
             double estimatedIBits = predictSize(&m_pred[m_predType], q, (double)m_currentSatd) * remDur;
-            remainingBits -= estimatedIBits;
+            remainingBits = X265_MAX(0.0, remainingBits - estimatedIBits);
         }
 
-		if (!isLastSegmentInaEncode && m_segDur <  (0.2 * segDur))
+		if (!isLastSegmentInaEncode && m_segDur + pendingDuration < (0.2 * segDur))
         {
             if (frameBitsTotal + remainingBits > (allowedSize * 2))
                 q = q * 1.01;
@@ -3639,8 +3657,6 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
         m_wantedBitsWindow = double(m_wantedBitsWindow) + frameDurSecs * (m_bRcReConfig ? (curFrame->m_targetBitrate * 1000) : m_bitrate);
         m_totalBits.add(bits - rce->rowTotalBits);
         m_encodedBits += actualBits;
-        m_encodedSegmentBits += actualBits;
-        m_segDur += frameDurSecs;
         int pos = m_sliderPos - m_param->frameNumThreads;
         if (pos >= 0)
             m_encodedBitsWindow[pos % s_slidingWindowFrames] = actualBits;
@@ -3673,9 +3689,13 @@ int RateControl::rateControlEnd(Frame* curFrame, int64_t bits, RateControlEntry*
             curFrame->m_rcData->offset[i] = m_pred[i].offset;
         }
     }
-    if (rce->sliceType == I_SLICE)
+    if (m_param->bEnableSBRC &&
+        rce->encodeOrder / m_param->keyframeMax == (m_framesDone - 1) / m_param->keyframeMax)
     {
-        m_iBits = actualBits;
+        m_encodedSegmentBits += actualBits;
+        m_segDur += rce->cpbDuration * m_timebase;
+        if (rce->sliceType == I_SLICE)
+            m_iBits = actualBits;
     }
     rce->isActive = false;
     // Allow rateControlStart of next frame only when rateControlEnd of previous frame is over
