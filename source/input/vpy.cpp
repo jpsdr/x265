@@ -50,30 +50,37 @@ void VS_CC logMessageHandler(int msgType, const char* msg, void*)
 
 void VPYInput::setAsyncFrame(int n, const VSFrame* f, const char* errorMsg)
 {
-    if (errorMsg)
-	{
-        sprintf(frameError, "%s\n", errorMsg);
+    std::lock_guard<std::mutex> lock(frameMutex);
+    if (!f)
+    {
+        snprintf(frameError, sizeof(frameError), "%s", errorMsg ? errorMsg : "unknown error");
         vpyFailed = true;
     }
-    if (f)
-    {
-        ++completedFrames;
-        frameMap[n].second = f;
-    }
-    SetEvent(frameMap[n].first);
+    frameMap.at(n).second = f;
+    SetEvent(frameMap.at(n).first);
+    ++completedFrames;
 }
 const VSFrame* VPYInput::getAsyncFrame(int n)
 {
-    WaitForSingleObject(frameMap[n].first, INFINITE);
-    const VSFrame *frame = frameMap[n].second;
-    CloseEvent(frameMap[n].first);
-    frameMap.erase(n);
-    if (requestedFrames < framesToRequest && isRunning)
+    HANDLE event;
     {
-        vsapi->getFrameAsync(requestedFrames, node, frameDoneCallback, this);
-        ++requestedFrames;
-	}
-	return frame;
+        std::lock_guard<std::mutex> lock(frameMutex);
+        event = frameMap.at(n).first;
+    }
+    WaitForSingleObject(event, INFINITE);
+    const VSFrame* frame;
+    int request = -1;
+    {
+        std::lock_guard<std::mutex> lock(frameMutex);
+        frame = frameMap.at(n).second;
+        CloseEvent(event);
+        frameMap.erase(n);
+        if (frame && requestedFrames < framesToRequest && isRunning)
+            request = requestedFrames++;
+    }
+    if (request >= 0)
+        vsapi->getFrameAsync(request, node, frameDoneCallback, this);
+    return frame;
 }
 
 lib_path_t VPYInput::convertLibraryPath(std::string path)
@@ -167,7 +174,6 @@ void VPYInput::load_vs() {
         vpyFailed = true;
         return;
     }
-    vs_close();
 }
 
 VPYInput::VPYInput(InputFileInfo& info)
@@ -220,12 +226,13 @@ VPYInput::VPYInput(InputFileInfo& info)
     {
         general_log(nullptr, "vpy", X265_LOG_ERROR, "only constant video formats are supported\n");
         vpyFailed = true;
+        return;
     }
 
     info.width = vi->width;
     info.height = vi->height;
 
-	if (parallelRequests == -1 || core_info.numThreads < parallelRequests)
+	if (parallelRequests <= 0 || core_info.numThreads < parallelRequests)
         parallelRequests = core_info.numThreads;
 
     char errbuf[256];
@@ -278,7 +285,7 @@ VPYInput::VPYInput(InputFileInfo& info)
 
 	if (info.encodeToFrame)
     {
-        framesToRequest = info.encodeToFrame + nextFrame;
+        framesToRequest = nextFrame + std::min(info.encodeToFrame, vi->numFrames - nextFrame);
     }
 
     if (vi->format.bitsPerSample >= 8 && vi->format.bitsPerSample <= 16)
@@ -319,7 +326,7 @@ void VPYInput::startReader()
 {
     general_log(nullptr, "vpy", X265_LOG_INFO, "using %d parallel requests\n", parallelRequests);
 
-    for (int i = nextFrame; i <= framesToRequest; i++)
+    for (int i = nextFrame; i < framesToRequest; i++)
     {
         if (NULL == (frameMap[i].first = CreateEvent(NULL, false, false, NULL)))
         {
@@ -331,7 +338,7 @@ void VPYInput::startReader()
     }
 
     const int requestStart = completedFrames;
-    const int intitalRequestSize = std::min<int>(parallelRequests, _info.frameCount - requestStart);
+    const int intitalRequestSize = std::min<int>(parallelRequests, framesToRequest - requestStart);
     requestedFrames = requestStart + intitalRequestSize;
 
     for (int n = requestStart; n < requestStart + intitalRequestSize; n++)
@@ -349,30 +356,20 @@ void VPYInput::stopReader()
         Sleep(400);
     }
 
+    std::lock_guard<std::mutex> lock(frameMutex);
     for (auto &iter : frameMap)
     {
-        if (iter.second.second != nullptr)
+        if (iter.second.second)
             vsapi->freeFrame(iter.second.second);
+        if (iter.second.first)
+            CloseEvent(iter.second.first);
     }
+    frameMap.clear();
 }
 
 void VPYInput::release()
 {
-    isRunning = false;
-
-    if (vpyFailed)
-        for (auto &iter : frameMap)
-        {
-            if (iter.second.second != nullptr)
-                vsapi->freeFrame(iter.second.second);
-        }
-
-    for (int i = 0; i < framesToRequest; i++)
-    {
-        if (frameMap.count(i)>0)
-            if(frameMap[i].first)
-                CloseEvent(frameMap[i].first);
-    }
+    stopReader();
 
     if (node)
         vsapi->freeNode(node);
@@ -393,15 +390,16 @@ bool VPYInput::readPicture(x265_picture& pic)
 {
     const VSFrame* currentFrame = nullptr;
 
-    if (nextFrame >= _info.frameCount || !isRunning)
+    if (nextFrame >= framesToRequest || !isRunning || vpyFailed)
         return false;
 
     currentFrame = getAsyncFrame(nextFrame);
 
     if (!currentFrame)
     {
+        std::lock_guard<std::mutex> lock(frameMutex);
         fprintf(stderr, "%*s\r", 130, " "); // make it more readable
-        general_log(nullptr, "vpy", X265_LOG_ERROR, "error occurred while reading frame %d\n", nextFrame, frameError);
+        general_log(nullptr, "vpy", X265_LOG_ERROR, "error occurred while reading frame %d: %s\n", nextFrame, frameError);
         framesToRequest = nextFrame;
         vpyFailed = true;
         return false;
@@ -415,8 +413,14 @@ bool VPYInput::readPicture(x265_picture& pic)
     if (frame_size == 0 || frame_buffer == nullptr)
 	{
         for (int i = 0; i < x265_cli_csps[_info.csp].planes; i++)
-            frame_size += vsapi->getFrameHeight(currentFrame, i) * vsapi->getStride(currentFrame, i);
+            frame_size += (size_t)vsapi->getFrameHeight(currentFrame, i) * vsapi->getFrameWidth(currentFrame, i) * (_info.depth > 8 ? 2 : 1);
         frame_buffer = reinterpret_cast<uint8_t*>(x265_malloc(frame_size));
+        if (!frame_buffer)
+        {
+            vsapi->freeFrame(currentFrame);
+            vpyFailed = true;
+            return false;
+        }
     }
 
     pic.framesize = frame_size;
@@ -424,12 +428,16 @@ bool VPYInput::readPicture(x265_picture& pic)
     uint8_t* ptr = frame_buffer;
     for (int i = 0; i < x265_cli_csps[_info.csp].planes; i++)
     {
-        pic.stride[i] = vsapi->getStride(currentFrame, i);
+        pic.stride[i] = vsapi->getFrameWidth(currentFrame, i) * (_info.depth > 8 ? 2 : 1);
         pic.planes[i] = ptr;
-        auto len = vsapi->getFrameHeight(currentFrame, i) * pic.stride[i];
-
-        memcpy(pic.planes[i], const_cast<unsigned char*>(vsapi->getReadPtr(currentFrame, i)), len);
-        ptr += len;
+        const uint8_t* src = vsapi->getReadPtr(currentFrame, i);
+        const auto stride = vsapi->getStride(currentFrame, i);
+        for (int y = 0; y < vsapi->getFrameHeight(currentFrame, i); ++y)
+        {
+            memcpy(ptr, src, pic.stride[i]);
+            ptr += pic.stride[i];
+            src += stride;
+        }
     }
 
     vsapi->freeFrame(currentFrame);

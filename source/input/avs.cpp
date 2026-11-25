@@ -264,6 +264,12 @@ bool AVSInput::readPicture(x265_picture& pic)
             frame_size += target_pitch * planeheight;
         }
         frame_buffer = reinterpret_cast<uint8_t*>(x265_malloc(frame_size));
+        if (!frame_buffer)
+        {
+            h->func.avs_release_video_frame(frm);
+            b_fail = true;
+            return false;
+        }
     }
     pic.framesize = frame_size;
     uint8_t* ptr = frame_buffer;

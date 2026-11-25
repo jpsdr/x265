@@ -26,6 +26,7 @@
 
 #include <unordered_map>
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <map>
@@ -86,12 +87,13 @@ protected:
     int nextFrame {0};
     int nodeIndex {0};
     bool useScriptSar {false};
-    bool vpyFailed {false};
-    char frameError[512];
+    std::atomic<bool> vpyFailed {false};
+    std::mutex frameMutex;
+    char frameError[512] {};
     size_t frame_size {0};
     uint8_t* frame_buffer {nullptr};
     InputFileInfo _info;
-    lib_t vss_library;
+    lib_t vss_library {nullptr};
     #if _WIN32
         lib_path_t vss_library_path {L"vsscript"};
         void vs_open() { vss_library = LoadLibraryW(vss_library_path.c_str()); }
