@@ -2037,9 +2037,9 @@ int x265_check_params(x265_param* param)
         param->bThreadedME = 0;
         x265_log(param, X265_LOG_WARNING, "VBV and threaded-me both enabled. Disabling threaded-me\n");
     }
-    CHECK(param->minVbvFullness < 0 && param->minVbvFullness > 100,
+    CHECK(param->minVbvFullness < 0 || param->minVbvFullness > 100,
         "min-vbv-fullness must be a fraction 0 - 100");
-    CHECK(param->maxVbvFullness < 0 && param->maxVbvFullness > 100,
+    CHECK(param->maxVbvFullness < 0 || param->maxVbvFullness > 100,
         "max-vbv-fullness must be a fraction 0 - 100");
     CHECK(param->rc.bitrate < 0,
           "Target bitrate can not be less than zero");
