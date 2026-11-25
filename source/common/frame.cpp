@@ -66,8 +66,8 @@ Frame::Frame()
     m_edgeBitPlane = NULL;
     m_edgeBitPic = NULL;
     m_AutoAQ = 0;
-    m_AutoAQ_thrs_bright = AQ_AUTO_THRS_NONE;
-    m_AutoAQ_thrs_edge = AQ_AUTO_THRS_NONE;
+    m_gaussianPicValid = false;
+    m_edgeBitPicValid = false;
     m_isInsideWindow = 0;
 
     // mcstf

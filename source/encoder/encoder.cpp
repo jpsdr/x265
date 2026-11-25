@@ -4252,6 +4252,7 @@ void Encoder::configure(x265_param *p)
 
     if (p->rc.rateControlMode == X265_RC_CQP)
     {
+        p->rc.AQAuto = 0;
         p->rc.aqMode = X265_AQ_NONE;
         p->rc.hevcAq = 0;
         p->rc.bitrate = 0;
@@ -4259,6 +4260,14 @@ void Encoder::configure(x265_param *p)
         p->rc.aqStrength = 0;
         p->bAQMotion = 0;
     }
+
+    if (p->rc.AQAuto && p->rc.hevcAq)
+    {
+        x265_log(p, X265_LOG_WARNING, "hevc-aq enabled, disabling aq-auto\n");
+        p->rc.AQAuto = 0;
+    }
+    if (p->rc.AQAuto && p->rc.aqMode == X265_AQ_NONE)
+        p->rc.aqMode = X265_AQ_VARIANCE;
 
     if (p->rc.aqMode == 0 && p->rc.cuTree)
     {
@@ -4279,6 +4288,7 @@ void Encoder::configure(x265_param *p)
     }
     if (p->rc.aqStrength == 0 && p->rc.cuTree == 0)
     {
+        p->rc.AQAuto = 0;
         p->rc.aqMode = X265_AQ_NONE;
         p->rc.hevcAq = 0;
     }

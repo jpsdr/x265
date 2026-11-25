@@ -162,8 +162,8 @@ public:
 
     /* AQ for each frame */
     int                    m_AutoAQ;
-    int                    m_AutoAQ_thrs_bright;
-    int                    m_AutoAQ_thrs_edge;
+    bool                   m_gaussianPicValid;
+    bool                   m_edgeBitPicValid;
 
     int                    m_isInsideWindow;
 

@@ -137,7 +137,7 @@ struct LookaheadTLD
     uint32_t calcVariance(pixel* src, intptr_t stride, intptr_t blockOffset, uint32_t plane);
 
     void calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param);
-    void calcAutoAQ(Frame* curFrame);
+    void measureAutoAQ(Frame* curFrame, double& edgeIntensity, double& brightnessIntensity);
     void lowresIntraEstimate(Lowres& fenc, uint32_t qgSize);
 
     void weightsAnalyse(Lowres& fenc, Lowres& ref);
@@ -182,6 +182,10 @@ public:
     int32_t*      m_gradMagBuf;      // persistent gradient-magnitude buffer for estimateNoise()
     bool          m_filterThisGOP;  // noise gate decision for the GOP currently being dispatched
     int           m_lastMcstfAnchorPoc; // POC of the last non-I anchor frame that MCSTF was applied to
+
+    int m_AutoAQ_thrs_bright;
+    int m_AutoAQ_thrs_edge;
+    void selectAutoAQ(Frame* preFrame, double edgeIntensity, double brightnessIntensity);
 
     /* pre-lookahead */
     int           m_fullQueueSize;
@@ -330,8 +334,11 @@ public:
 
     Frame* m_preframes[X265_LOOKAHEAD_MAX];
     Lookahead& m_lookahead;
+    double m_edgeIntensity[X265_LOOKAHEAD_MAX];
+    double m_brightnessIntensity[X265_LOOKAHEAD_MAX];
+    bool m_autoAQPrepass;
 
-    PreLookaheadGroup(Lookahead& l) : m_lookahead(l) {}
+    PreLookaheadGroup(Lookahead& l) : m_lookahead(l), m_autoAQPrepass(false) {}
 
     void processTasks(int workerThreadID);
 

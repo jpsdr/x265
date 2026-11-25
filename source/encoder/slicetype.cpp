@@ -230,7 +230,11 @@ void edgeFilter(Frame *curFrame, x265_param* param)
     src = (pixel*)curFrame->m_fencPic->m_picOrg[0];
     refPic = curFrame->m_gaussianPic + curFrame->m_fencPic->m_lumaMarginY * stride + curFrame->m_fencPic->m_lumaMarginX;
     edgePic = curFrame->m_edgePic + curFrame->m_fencPic->m_lumaMarginY * stride + curFrame->m_fencPic->m_lumaMarginX;
-    if (!param->rc.aqFastEdge) gaussianBlur5x5(refPic, src, stride, height, width);
+    if (!param->rc.aqFastEdge)
+    {
+        gaussianBlur5x5(refPic, src, stride, height, width);
+        curFrame->m_gaussianPicValid = true;
+    }
 
     if(!computeEdge(edgePic, refPic, edgeTheta, stride, height, width, true))
         x265_log(NULL, X265_LOG_ERROR, "Failed edge computation!");
@@ -465,6 +469,7 @@ void LookaheadTLD::xPreanalyze(Frame* curFrame)
 
 void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
 {
+    const int aqMode = param->rc.AQAuto ? curFrame->m_AutoAQ : param->rc.aqMode;
     /* Actual adaptive quantization */
     int maxCol = curFrame->m_fencPic->m_picWidth;
     int maxRow = curFrame->m_fencPic->m_picHeight;
@@ -495,9 +500,9 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
     if (!(param->rc.bStatRead && param->rc.cuTree && IS_REFERENCED(curFrame)))
     {
         /* Calculate Qp offset for each 16x16 or 8x8 block in the frame */
-        if (param->rc.aqMode == X265_AQ_NONE || param->rc.aqStrength == 0)
+        if (aqMode == X265_AQ_NONE || param->rc.aqStrength == 0)
         {
-            if (param->rc.aqMode && param->rc.aqStrength == 0)
+            if (aqMode && param->rc.aqStrength == 0)
             {
                 if (quantOffsets)
                 {
@@ -539,17 +544,18 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                 double strength = 0.f;
                 double limitAq1_strength = 0.f;
 
-                if (param->rc.aqMode == X265_AQ_EDGE || param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                if (aqMode == X265_AQ_EDGE || aqMode == X265_AQ_EDGE_BIASED)
                     edgeFilter(curFrame, param);
 
-                if ((param->rc.aqMode == X265_AQ_EDGE || param->rc.aqMode == X265_AQ_EDGE_BIASED) && param->recursionSkipMode == EDGE_BASED_RSKIP)
+                if ((aqMode == X265_AQ_EDGE || aqMode == X265_AQ_EDGE_BIASED) && param->recursionSkipMode == EDGE_BASED_RSKIP)
                 {
                     pixel* src = curFrame->m_edgePic + curFrame->m_fencPic->m_lumaMarginY * curFrame->m_fencPic->m_stride + curFrame->m_fencPic->m_lumaMarginX;
                     primitives.planecopy_pp_shr(src, curFrame->m_fencPic->m_stride, curFrame->m_edgeBitPic,
                         curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picWidth, curFrame->m_fencPic->m_picHeight, SHIFT_TO_BITPLANE);
+                    curFrame->m_edgeBitPicValid = true;
                 }
 
-                if (param->rc.aqMode == X265_AQ_AUTO_VARIANCE || param->rc.aqMode == X265_AQ_AUTO_VARIANCE_BIASED || param->rc.aqMode == X265_AQ_EDGE || param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                if (aqMode == X265_AQ_AUTO_VARIANCE || aqMode == X265_AQ_AUTO_VARIANCE_BIASED || aqMode == X265_AQ_EDGE || aqMode == X265_AQ_EDGE_BIASED)
                 {
                     double bit_depth_correction = 1.f / (1 << (2 * (X265_DEPTH - 8)));
                     for (int blockY = 0; blockY < maxRow; blockY += loopIncr)
@@ -558,7 +564,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                         {
                             uint32_t energy, edgeDensity, avgAngle;
                             energy = acEnergyCu(curFrame, blockX, blockY, param->internalCsp, param->rc.qgSize);
-                            if (param->rc.aqMode == X265_AQ_EDGE || param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                            if (aqMode == X265_AQ_EDGE || aqMode == X265_AQ_EDGE_BIASED)
                             {
                                 edgeDensity = edgeDensityCu(curFrame, avgAngle, blockX, blockY, param->rc.qgSize);
                                 if (edgeDensity)
@@ -586,12 +592,12 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                     }
                     avg_adj /= blockCount;
                     avg_adj_pow2 /= blockCount;
-                    if ((param->rc.aqMode == X265_AQ_EDGE) || (param->rc.aqMode == X265_AQ_EDGE_BIASED))
+                    if ((aqMode == X265_AQ_EDGE) || (aqMode == X265_AQ_EDGE_BIASED))
                         strength = param->rc.aqStrengthEdge * avg_adj;
                     else
                         strength = param->rc.aqStrength * avg_adj;
                     avg_adj = avg_adj - 0.5f * (avg_adj_pow2 - modeTwoConst) / avg_adj;
-                    if (param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                    if (aqMode == X265_AQ_EDGE_BIASED)
                         bias_strength = param->rc.aqBiasStrengthEdge * param->rc.aqStrength;
                     else
                         bias_strength = param->rc.aqBiasStrength * param->rc.aqStrength;
@@ -608,7 +614,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                 {
                     for (int blockX = 0; blockX < maxCol; blockX += loopIncr)
                     {
-                        if (param->rc.aqMode == X265_AQ_AUTO_VARIANCE_BIASED)
+                        if (aqMode == X265_AQ_AUTO_VARIANCE_BIASED)
                         {
                             qp_adj = curFrame->m_lowres.qpCuTreeOffset[blockXY];
                             qp_adj = strength * (qp_adj - avg_adj) + bias_strength * (1.f - modeTwoConst / (qp_adj * qp_adj));
@@ -618,7 +624,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                                 qp_adj = X265_MIN(qp_adj, aq1_qp_adj);
                             }
                         }
-                        else if (param->rc.aqMode == X265_AQ_AUTO_VARIANCE)
+                        else if (aqMode == X265_AQ_AUTO_VARIANCE)
                         {
                             qp_adj = curFrame->m_lowres.qpCuTreeOffset[blockXY];
                             qp_adj = strength * (qp_adj - avg_adj);
@@ -628,7 +634,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                                 qp_adj = X265_MIN(qp_adj, aq1_qp_adj);
                             }
                         }
-                        else if (param->rc.aqMode == X265_AQ_EDGE)
+                        else if (aqMode == X265_AQ_EDGE)
                         {
                             inclinedEdge = curFrame->m_lowres.edgeInclined[blockXY];
                             qp_adj = curFrame->m_lowres.qpCuTreeOffset[blockXY];
@@ -642,7 +648,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                                 qp_adj = X265_MIN(qp_adj, aq1_qp_adj);
                             }
                         }
-                        else if (param->rc.aqMode == X265_AQ_EDGE_BIASED)
+                        else if (aqMode == X265_AQ_EDGE_BIASED)
                         {
                             inclinedEdge = curFrame->m_lowres.edgeInclined[blockXY];
                             qp_adj = curFrame->m_lowres.qpCuTreeOffset[blockXY];
@@ -1035,7 +1041,7 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
      * edgeFilter() during xPreanalyzeQp) when AQ-edge mode ran it; otherwise compute
      * a 3×3 box blur inline. */
     const pixel *blurSrc;
-    if (m_param->rc.aqMode == X265_AQ_EDGE)
+    if (curFrame->m_gaussianPicValid)
     {
         blurSrc = curFrame->m_gaussianPic
                 + curFrame->m_fencPic->m_lumaMarginY * stride
@@ -1098,6 +1104,8 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
 Lookahead::Lookahead(x265_param *param, ThreadPool* pool, SPS* sps)
 {
     m_param = param;
+    m_AutoAQ_thrs_bright = AQ_AUTO_THRS_NONE;
+    m_AutoAQ_thrs_edge = AQ_AUTO_THRS_NONE;
     m_pool  = pool;
     m_sps = sps;
 
@@ -1955,14 +1963,12 @@ void LookaheadTLD::collectPictureStatistics(Frame *curFrame)
     curFrame->m_lowres.bHistScenecutAnalyzed = false;
 }
 
-void LookaheadTLD::calcAutoAQ(Frame* preFrame)
+void LookaheadTLD::measureAutoAQ(Frame* preFrame, double& edgeIntensity, double& brightnessIntensity)
 {
     int heightL = preFrame->m_lowres.lines;
     int widthL = preFrame->m_lowres.width;
     pixel* lumaPlane = preFrame->m_lowres.fpelPlane[0];
     intptr_t stride = preFrame->m_lowres.lumaStride;
-    double brightnessIntensity = 0, edgeIntensity = 0;
-    int aqm_eb, aqm_e, aqm_b, aqm;
 
     /* Edge plane computation */
     memset(preFrame->m_lowres.lowresEdgePlane, 0, stride * (heightL + (preFrame->m_fencPic->m_lumaMarginY * 2)) * sizeof(pixel));
@@ -1975,34 +1981,39 @@ void LookaheadTLD::calcAutoAQ(Frame* preFrame)
     /* Frame Brightness percentage computation */
     brightnessIntensity = computeBrightnessIntensity(lumaPlane, widthL, heightL, stride);
 
+}
+
+void Lookahead::selectAutoAQ(Frame* preFrame, double edgeIntensity, double brightnessIntensity)
+{
+    int aqm_eb, aqm_e, aqm_b, aqm;
     /* AQ mode switch */
     /* If hysteresis enabled */
-    if (preFrame->m_param->rc.AQAuto_hyst)
+    if (m_param->rc.AQAuto_hyst)
     {
-        if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_NONE)
-            preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        if (m_AutoAQ_thrs_edge == AQ_AUTO_THRS_NONE)
+            m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
         else
         {
-            if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
-                preFrame->m_AutoAQ_thrs_edge = (edgeIntensity > FRAME_EDGE_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+            if (m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
+                m_AutoAQ_thrs_edge = (edgeIntensity > FRAME_EDGE_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
             else
-                preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+                m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
         }
 
-        if (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_NONE)
-            preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+        if (m_AutoAQ_thrs_bright == AQ_AUTO_THRS_NONE)
+            m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
         else
         {
-            if (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_LOW)
-                preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+            if (m_AutoAQ_thrs_bright == AQ_AUTO_THRS_LOW)
+                m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD_HIGH) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
             else
-                preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity < FRAME_BRIGHTNESS_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+                m_AutoAQ_thrs_bright = (brightnessIntensity < FRAME_BRIGHTNESS_THRESHOLD_LOW) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
         }
     }
     else
     {
-        preFrame->m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
-        preFrame->m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
+        m_AutoAQ_thrs_edge = (edgeIntensity < FRAME_EDGE_THRESHOLD) ? AQ_AUTO_THRS_LOW : AQ_AUTO_THRS_HIGH;
+        m_AutoAQ_thrs_bright = (brightnessIntensity > FRAME_BRIGHTNESS_THRESHOLD) ? AQ_AUTO_THRS_HIGH : AQ_AUTO_THRS_LOW;
     }
 
     aqm_eb = X265_AQ_EDGE;
@@ -2010,19 +2021,18 @@ void LookaheadTLD::calcAutoAQ(Frame* preFrame)
     aqm_b = X265_AQ_AUTO_VARIANCE;
     aqm = X265_AQ_AUTO_VARIANCE_BIASED;
 
-    if (preFrame->m_param->rc.AQAuto_aq5) aqm_e = X265_AQ_EDGE_BIASED;
-    if (preFrame->m_param->rc.AQAuto_hdr)
+    if (m_param->rc.AQAuto_aq5) aqm_e = X265_AQ_EDGE_BIASED;
+    if (m_param->rc.AQAuto_hdr)
     {
         aqm_e = X265_AQ_VARIANCE;
         aqm = X265_AQ_AUTO_VARIANCE;
     }
 
-    if (preFrame->m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
-        preFrame->m_AutoAQ = (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_b : aqm;
+    if (m_AutoAQ_thrs_edge == AQ_AUTO_THRS_LOW)
+        preFrame->m_AutoAQ = (m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_b : aqm;
     else
-        preFrame->m_AutoAQ = (preFrame->m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_eb : aqm_e;
+        preFrame->m_AutoAQ = (m_AutoAQ_thrs_bright == AQ_AUTO_THRS_HIGH) ? aqm_eb : aqm_e;
 
-    preFrame->m_param->rc.aqMode = preFrame->m_AutoAQ;
 }
 
 void PreLookaheadGroup::processTasks(int workerThreadID)
@@ -2034,14 +2044,22 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
     m_lock.acquire();
     while (m_jobAcquired < m_jobTotal)
     {
-        Frame* preFrame = m_preframes[m_jobAcquired++];
+        const int job = m_jobAcquired++;
+        Frame* preFrame = m_preframes[job];
         ProfileScopeEvent(prelookahead);
         m_lock.release();
-        preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc, m_lookahead.m_param->bEnableTemporalFilter);
-
-        /* Auto-AQ mode */
-        if (preFrame->m_param->rc.AQAuto != 0)
-            tld.calcAutoAQ(preFrame);
+        if (m_autoAQPrepass || !m_lookahead.m_param->rc.AQAuto)
+        {
+            preFrame->m_gaussianPicValid = false;
+            preFrame->m_edgeBitPicValid = false;
+            preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc, m_lookahead.m_param->bEnableTemporalFilter);
+        }
+        if (m_autoAQPrepass)
+        {
+            tld.measureAutoAQ(preFrame, m_edgeIntensity[job], m_brightnessIntensity[job]);
+            m_lock.acquire();
+            continue;
+        }
 
         if (m_lookahead.m_bAdaptiveQuant)
             tld.calcAdaptiveQuantFrame(preFrame, m_lookahead.m_param);
@@ -2322,6 +2340,20 @@ void Lookahead::slicetypeDecide()
     if (pre.m_jobTotal)
     {
         ProfileLookaheadTimeCount(m_preLookaheadElapsedTime, m_countPreLookahead);
+        if (m_param->rc.AQAuto)
+        {
+            pre.m_autoAQPrepass = true;
+            if (m_pool)
+                pre.tryBondPeers(*m_pool, pre.m_jobTotal);
+            pre.processTasks(-1);
+            pre.waitForExit();
+
+            for (int i = 0; i < pre.m_jobTotal; i++)
+                selectAutoAQ(pre.m_preframes[i], pre.m_edgeIntensity[i], pre.m_brightnessIntensity[i]);
+
+            pre.m_jobAcquired = 0;
+            pre.m_autoAQPrepass = false;
+        }
         if (m_pool)
             pre.tryBondPeers(*m_pool, pre.m_jobTotal);
         pre.processTasks(-1);
