@@ -133,15 +133,20 @@ void general_log(const x265_param* param, const char* caller, int level, const c
     }
 
     if (caller)
-        p += snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
+    {
+        int n = snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
+        p = n < 0 ? 0 : (n >= bufferSize ? bufferSize - 1 : n);
+    }
     va_list arg;
     va_start(arg, fmt);
+    buffer[p] = 0;
     vsnprintf(buffer + p, bufferSize - p, fmt, arg);
+    buffer[bufferSize - 1] = 0;
     va_end(arg);
     if (!(param && level > param->logLevel))
         fputs(buffer, stderr);
     if (param && strlen(param->logfn) && level <= param->logfLevel) {
-        FILE* fp = fopen(param->logfn, "ab");
+        FILE* fp = x265_fopen(param->logfn, "ab");
         if (fp) {
             fputs(buffer, fp);
             fclose(fp);
@@ -183,10 +188,15 @@ void general_log_file(const x265_param* param, const char* caller, int level, co
     }
 
     if (caller)
-        p += snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
+    {
+        int n = snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
+        p = n < 0 ? 0 : (n >= bufferSize ? bufferSize - 1 : n);
+    }
     va_list arg;
     va_start(arg, fmt);
+    buffer[p] = 0;
     vsnprintf(buffer + p, bufferSize - p, fmt, arg);
+    buffer[bufferSize - 1] = 0;
     va_end(arg);
 
     HANDLE console = GetStdHandle(STD_ERROR_HANDLE);

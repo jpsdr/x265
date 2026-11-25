@@ -743,7 +743,7 @@ ret:
                 /* Open per-frame gaze file if specified */
                 if (m_param->foveaGazeFile && m_param->foveaGazeFile[0])
                 {
-                    m_foveaGazeFileFP = fopen(m_param->foveaGazeFile, "r");
+                    m_foveaGazeFileFP = x265_fopen(m_param->foveaGazeFile, "r");
                     if (!m_foveaGazeFileFP)
                         x265_log(m_param, X265_LOG_WARNING, "fovea: cannot open gaze file '%s', "
                                  "using static gaze\n", m_param->foveaGazeFile);
