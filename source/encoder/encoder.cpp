@@ -2767,7 +2767,6 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
             snprintf(encParam->scalingLists, X265_MAX_STRING_SIZE, "%s", param->scalingLists);
 
         encParam->rc.aqMode = param->rc.aqMode;
-        encParam->rc.aqStrength = param->rc.aqStrength;
         encParam->rc.limitAq1 = param->rc.limitAq1;
         encParam->rc.aqStrength = param->rc.aqStrength;
         encParam->rc.aqBiasStrength = param->rc.aqBiasStrength;
@@ -4491,7 +4490,7 @@ void Encoder::configure(x265_param *p)
 
     if (p->bEnableTemporalSubLayers > 2)
     {
-        if (!p->bFrameAdaptive)
+        if (p->bFrameAdaptive)
             x265_log(p, X265_LOG_WARNING, "Disabling adaptive B-frame placement to support temporal sub-layers\n");
 
         p->bFrameAdaptive = 0;

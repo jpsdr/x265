@@ -66,7 +66,7 @@ public:
 
         /* Scale PSY RD factor by a slice type factor */
         /* static const uint32_t psyScaleFix8[3] = { 300, 256, 96 }; B, P, I */
-        static const uint32_t psyScaleFix8[3] = { m_psyScaleFix8_B, m_psyScaleFix8_P, m_psyScaleFix8_I }; /* B, P, I */
+        const uint32_t psyScaleFix8[3] = { m_psyScaleFix8_B, m_psyScaleFix8_P, m_psyScaleFix8_I }; /* B, P, I */
         m_psyRd = (m_psyRdBase * psyScaleFix8[slice.m_sliceType]) >> 8;
 
         /* Scale PSY RD factor by QP, at high QP psy-rd can cause artifacts */
