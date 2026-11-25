@@ -2777,6 +2777,11 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->rc.limitAq1 = param->rc.limitAq1;
         encParam->rc.aqStrength = param->rc.aqStrength;
         encParam->rc.aqBiasStrength = param->rc.aqBiasStrength;
+        encParam->rc.aqStrengthEdge_b = param->rc.aqStrengthEdge_b;
+        encParam->rc.aqBiasStrengthEdge_b = param->rc.aqBiasStrengthEdge_b;
+        encParam->rc.aqStrengthEdge = param->rc.aqStrengthEdge_b ? param->rc.aqStrengthEdge : encParam->rc.aqStrength;
+        encParam->rc.aqBiasStrengthEdge = param->rc.aqBiasStrengthEdge_b ? param->rc.aqBiasStrengthEdge : encParam->rc.aqBiasStrength;
+        encParam->rc.aqFastEdge = param->rc.aqFastEdge;
         encParam->rc.limitAq1Strength = param->rc.limitAq1Strength;
         encParam->noiseReductionInter = param->noiseReductionInter;
         encParam->noiseReductionIntra = param->noiseReductionIntra;
@@ -4002,6 +4007,11 @@ void Encoder::configureZone(x265_param *p, x265_param *zone)
         p->rc.limitAq1 = zone->rc.limitAq1;
         p->rc.aqStrength = zone->rc.aqStrength;
         p->rc.aqBiasStrength = zone->rc.aqBiasStrength;
+        p->rc.aqStrengthEdge_b = zone->rc.aqStrengthEdge_b;
+        p->rc.aqBiasStrengthEdge_b = zone->rc.aqBiasStrengthEdge_b;
+        p->rc.aqStrengthEdge = zone->rc.aqStrengthEdge_b ? zone->rc.aqStrengthEdge : p->rc.aqStrength;
+        p->rc.aqBiasStrengthEdge = zone->rc.aqBiasStrengthEdge_b ? zone->rc.aqBiasStrengthEdge : p->rc.aqBiasStrength;
+        p->rc.aqFastEdge = zone->rc.aqFastEdge;
         p->rc.limitAq1Strength = zone->rc.limitAq1Strength;
         p->noiseReductionInter = zone->noiseReductionInter;
         p->noiseReductionIntra = zone->noiseReductionIntra;
