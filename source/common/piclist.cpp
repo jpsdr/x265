@@ -202,6 +202,8 @@ Frame *PicList::popFront()
 Frame* PicList::getPOC(int poc, int sLayerId)
 {
     Frame *curFrame = m_start;
+    if (!curFrame)
+        return NULL;
     int layer = curFrame->m_param->numViews > 1 ? curFrame->m_viewId : (curFrame->m_param->numScalableLayers > 1) ? curFrame->m_sLayerId : 0;
     while (curFrame && (curFrame->m_poc != poc || layer != sLayerId))
     {
@@ -269,6 +271,8 @@ Frame *PicList::popBackMCSTF()
 Frame* PicList::getCurFrame(int sLayer)
 {
     Frame *curFrame = m_start;
+    if (!curFrame)
+        return NULL;
     int layer = curFrame->m_param->numViews > 1 ? curFrame->m_viewId : (curFrame->m_param->numScalableLayers > 1) ? curFrame->m_sLayerId : 0;
     if (layer == sLayer && curFrame != NULL)
         return curFrame;

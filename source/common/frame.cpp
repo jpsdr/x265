@@ -69,6 +69,7 @@ Frame::Frame()
     m_gaussianPicValid = false;
     m_edgeBitPicValid = false;
     m_isInsideWindow = 0;
+    m_backwardScenecut = -1;
 
     // mcstf
     m_isSubSampled = NULL;

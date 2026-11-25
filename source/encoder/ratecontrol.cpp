@@ -3989,7 +3989,7 @@ double RateControl::forwardMasking(Frame* curFrame, double q)
 
 
     //Check whether the current frame is within the forward window
-    if (curPos > lastScenecut && curPos <= (lastScenecut + (int64_t)maxWindowSize))
+    if (lastScenecut >= 0 && curPos > lastScenecut && curPos <= (lastScenecut + (int64_t)maxWindowSize))
         curFrame->m_isInsideWindow = FORWARD_WINDOW;
     if (curFrame->m_isInsideWindow == FORWARD_WINDOW)
     {
@@ -4055,7 +4055,7 @@ double RateControl::backwardMasking(Frame* curFrame, double q)
     /* windows in ticks, positions in display ticks: exact with any frame durations */
     const double ticksPerSec = 1.0 / m_timebase;
     uint32_t windowSize[6], prevWindow = 0;
-    int64_t lastScenecut = m_top->m_rateControl->m_lastScenecut;
+    int64_t lastScenecut = curFrame->m_backwardScenecut;
     int64_t curPos = curFrame->m_displayPicCount;
 
     double bwdRefQpDelta[6], bwdNonRefQpDelta[6], sliceTypeDelta[6];
@@ -4074,7 +4074,7 @@ double RateControl::backwardMasking(Frame* curFrame, double q)
             bwdNonRefQpDelta[i] = bwdRefQpDelta[i] + sliceTypeDelta[i];
     }
 
-    if (curFrame->m_isInsideWindow == BACKWARD_WINDOW)
+    if (curFrame->m_isInsideWindow == BACKWARD_WINDOW && lastScenecut > curPos)
     {
         if (curFrame->m_lowres.sliceType == X265_TYPE_P)
         {

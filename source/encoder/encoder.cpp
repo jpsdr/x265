@@ -1768,6 +1768,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 inFrame[layer]->m_lowres.satdCost = (int64_t)-1;
                 inFrame[layer]->m_lowresInit = false;
                 inFrame[layer]->m_isInsideWindow = 0;
+                inFrame[layer]->m_backwardScenecut = -1;
                 inFrame[layer]->m_tempLayer = 0;
                 inFrame[layer]->m_bPyramidLayer = 0;
                 inFrame[layer]->m_sameLayerRefPic = 0;
@@ -1827,6 +1828,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 {
                     /* window in ticks, measured back from this frame's display tick (m_clockTickCount, not yet advanced) */
                     int64_t backwardWindowTicks = (int64_t)((m_param->bwdMaxScenecutWindow / 1000.0) * ((double)m_param->fpsNum / m_param->fpsDenom));
+                    ScopedLock lock(m_lookahead->m_inputLock);
                     for (int i = 1; i <= p->lookaheadDepth; i++)
                     {
                         int frameNum = inFrame[layer]->m_poc - i;
@@ -1835,7 +1837,11 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                             continue;
                         if ((int64_t)m_clockTickCount - frame->m_displayPicCount > backwardWindowTicks)
                             break;
-                        frame->m_isInsideWindow = BACKWARD_WINDOW;
+                        if (frame->m_backwardScenecut < 0)
+                        {
+                            frame->m_isInsideWindow = BACKWARD_WINDOW;
+                            frame->m_backwardScenecut = (int64_t)m_clockTickCount;
+                        }
                     }
                 }
             }

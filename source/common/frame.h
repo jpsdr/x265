@@ -166,6 +166,7 @@ public:
     bool                   m_edgeBitPicValid;
 
     int                    m_isInsideWindow;
+    int64_t                m_backwardScenecut;
 
     /*Frame's temporal layer info*/
     uint8_t                m_tempLayer;      // TemporalId signalled in the bitstream (--temporal-layers)
