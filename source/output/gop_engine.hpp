@@ -64,7 +64,9 @@ private:
     int             frameOffset = 0;
 
     // Internal State
-    int             currentFrame = 0;
+    int             if (fail || !gopFP)
+            return -1;
+        currentFrame = 0;
     FILE*           gopFP = nullptr;
     FILE*           dataFP = nullptr;
 
@@ -85,8 +87,14 @@ public:
         p_param->bAnnexB        = false;
         p_param->bRepeatHeaders = false;
 
+        if (fail || !gopFP)
+            return;
+
         std::fprintf(gopFP, "#options %s.options\n", filenamePrefix.c_str());
-        ProduceOptFile(p_param);
+        if (std::fflush(gopFP) != 0 || std::ferror(gopFP))
+            fail = true;
+        if (!fail)
+            ProduceOptFile(p_param);
     }
 
     int WriteHeaders(const x265_nal* p_nal, uint32_t nalcount)
@@ -104,23 +112,29 @@ public:
         std::fprintf(gopFP, "#headers %s.headers\n", filenamePrefix.c_str());
 
         for (uint32_t i = 0; i < nalcount; i++) {
-            SmartWrite(p_nal[i].payload, p_nal[i].sizeBytes, hdr_file);
+            if (!SmartWrite(p_nal[i].payload, p_nal[i].sizeBytes, hdr_file))
+                break;
             totalWrites += static_cast<int>(p_nal[i].sizeBytes);
         }
 
-        std::fclose(hdr_file);
-        return totalWrites;
+        CloseFile(hdr_file);
+        if (std::fflush(gopFP) != 0 || std::ferror(gopFP))
+            fail = true;
+        return fail ? -1 : totalWrites;
     }
 
     int WriteFrame(const x265_nal* p_nalu, uint32_t nalcount, x265_picture& pic)
     {
+        if (fail || !gopFP)
+            return -1;
         const bool is_keyframe = pic.sliceType == X265_TYPE_IDR;
         int totalWrites = 0;
 
         if (is_keyframe) {
             if (dataFP) {
-                std::fclose(dataFP);
-                dataFP = nullptr;
+                CloseFile(dataFP);
+                if (fail)
+                    return -1;
             }
 
             std::stringstream ss;
@@ -133,18 +147,23 @@ public:
                 return -1;
 
             std::fprintf(gopFP, "%s\n", data_filename.c_str());
-            std::fflush(gopFP);
+            if (std::fflush(gopFP) != 0 || std::ferror(gopFP)) {
+                fail = true;
+                return -1;
+            }
         }
 
         constexpr int8_t ts_len  = 2 * static_cast<int8_t>(sizeof(int64_t));
         constexpr int8_t ts_lenx[4] = { 0, 0, 0, ts_len };
 
-        SmartWrite(&ts_lenx, sizeof(ts_lenx), dataFP);
-        SmartWrite(&pic.pts, sizeof(int64_t), dataFP);
-        SmartWrite(&pic.dts, sizeof(int64_t), dataFP);
+        if (!SmartWrite(&ts_lenx, sizeof(ts_lenx), dataFP) ||
+            !SmartWrite(&pic.pts, sizeof(int64_t), dataFP) ||
+            !SmartWrite(&pic.dts, sizeof(int64_t), dataFP))
+            return -1;
 
-        for (uint8_t i = 0; i < nalcount; i++) {
-            SmartWrite(p_nalu[i].payload, p_nalu[i].sizeBytes, dataFP);
+        for (uint32_t i = 0; i < nalcount; i++) {
+            if (!SmartWrite(p_nalu[i].payload, p_nalu[i].sizeBytes, dataFP))
+                return -1;
             totalWrites += static_cast<int>(p_nalu[i].sizeBytes);
         }
 
@@ -155,12 +174,12 @@ public:
     void Release()
     {
         if (dataFP)
-            std::fclose(dataFP);
+            CloseFile(dataFP);
 
         if (gopFP) {
             std::fprintf(gopFP, "# %d frames written, last frame %d\n",
                          currentFrame, currentFrame + frameOffset);
-            std::fclose(gopFP);
+            CloseFile(gopFP);
         }
     }
 
@@ -244,17 +263,23 @@ private:
                          ? p_param->vui.bEnableVideoFullRangeFlag
                          : 0);
 
-        std::fclose(optFP);
+        CloseFile(optFP);
     }
 
     FILE* OpenFileForWrite(const std::string& fname, bool retry)
     {
         while (true) {
             FILE* fp = x265_fopen(fname.c_str(), "wb");
-            if (fp != nullptr)
-                return fp;
+            if (fp != nullptr) {
+                if (std::setvbuf(fp, nullptr, _IONBF, 0) == 0)
+                    return fp;
+                std::fclose(fp);
+                fail = true;
+                LogError("unable to configure unbuffered output\n");
+                return nullptr;
+            }
 
-            if (!retry)
+            if (!retry || errno != ENOSPC)
                 break;
 
             // Retrying
@@ -270,23 +295,44 @@ private:
         return nullptr;
     }
 
-    void SmartWrite(const void* data, std::size_t size, FILE* file)
+    void CloseFile(FILE*& file)
     {
-        long data_pos = std::ftell(file);
-        if (data_pos < 0)
-            data_pos = 0;
+        if (file) {
+            if (std::ferror(file))
+                fail = true;
+            if (std::fclose(file) != 0) {
+                fail = true;
+                LogError("unable to close output file\n");
+            }
+            file = nullptr;
+        }
+    }
 
-        while (true) {
-            std::size_t written = std::fwrite(data, 1, size, file);
-            if (written == size)
-                break;
-
-            // ENOSPC
-            LogWarning("unable to write, error %d %s, retrying in %d seconds.\n",
-                       errno, std::strerror(errno), TIME_WAIT);
-            std::fseek(file, data_pos, SEEK_SET);
+    bool SmartWrite(const void* data, std::size_t size, FILE* file)
+    {
+        if (!file || fail) {
+            fail = true;
+            return false;
+        }
+        const unsigned char* ptr = static_cast<const unsigned char*>(data);
+        while (size) {
+            errno = 0;
+            std::size_t written = std::fwrite(ptr, 1, size, file);
+            int error = errno;
+            ptr += written;
+            size -= written;
+            if (!size && !std::ferror(file))
+                return true;
+            if (error != ENOSPC) {
+                fail = true;
+                LogError("unable to write, error %d %s\n", error, std::strerror(error));
+                return false;
+            }
+            LogWarning("disk full, retrying in %d seconds.\n", TIME_WAIT);
+            std::clearerr(file);
             sleep_seconds(TIME_WAIT);
         }
+        return true;
     }
 
     template <typename... Params>

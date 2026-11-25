@@ -662,6 +662,13 @@ ret:
             x265_analysis_data* analysisInfo = (x265_analysis_data*)(&pic_out[0].analysisData);
             bool isAbrSave = m_cliopt.saveLevel && (m_parent->m_numEncodes > 1);
 
+            if (m_cliopt.output->isFail())
+            {
+                b_ctrl_c = true;
+                m_ret = 3;
+                goto fail;
+            }
+
             if (!m_param->bRepeatHeaders && !m_param->bEnableSvtHevc)
             {
                 if (api->encoder_headers(m_encoder, &p_nal, &nal) < 0)
@@ -671,7 +678,16 @@ ret:
                     goto fail;
                 }
                 else
-                    m_cliopt.totalbytes += m_cliopt.output->writeHeaders(p_nal, nal);
+                {
+                    int written = m_cliopt.output->writeHeaders(p_nal, nal);
+                    if (written < 0)
+                    {
+                        b_ctrl_c = true;
+                        m_ret = 3;
+                        goto fail;
+                    }
+                    m_cliopt.totalbytes += written;
+                }
             }
 
             for (int view = 0; view < m_param->numViews - !!m_param->format; view++)
@@ -1028,7 +1044,14 @@ ret:
                     }
                     if (nal)
                     {
-                        m_cliopt.totalbytes += m_cliopt.output->writeFrame(p_nal, nal, pic_out[0]);
+                        int written = m_cliopt.output->writeFrame(p_nal, nal, pic_out[0]);
+                        if (written < 0)
+                        {
+                            b_ctrl_c = true;
+                            m_ret = 4;
+                            break;
+                        }
+                        m_cliopt.totalbytes += written;
                         if (pts_queue)
                         {
                             pts_queue->push(-pic_out[0].pts);
@@ -1066,7 +1089,14 @@ ret:
                 }
                 if (nal)
                 {
-                    m_cliopt.totalbytes += m_cliopt.output->writeFrame(p_nal, nal, pic_out[0]);
+                    int written = m_cliopt.output->writeFrame(p_nal, nal, pic_out[0]);
+                    if (written < 0)
+                    {
+                        b_ctrl_c = true;
+                        m_ret = 4;
+                        break;
+                    }
+                    m_cliopt.totalbytes += written;
                     if (pts_queue)
                     {
                         pts_queue->push(-pic_out[0].pts);
@@ -1119,6 +1149,8 @@ ret:
                 pts_queue = NULL;
             }
             m_cliopt.output->closeFile(largest_pts, second_largest_pts);
+            if (m_cliopt.output->isFail() && !m_ret)
+                m_ret = 4;
 
             if (b_ctrl_c)
 			{
