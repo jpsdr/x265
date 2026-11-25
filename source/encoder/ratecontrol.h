@@ -41,6 +41,9 @@ class SEIBufferingPeriod;
 struct SPS;
 #define BASE_FRAME_DURATION 0.04
 
+/* exponential decay factor for moving frame rate estimate. */
+#define FPS_AVERAGING_WINDOW 0.5
+
 /* Arbitrary limitations as a sanity check. */
 #define MAX_FRAME_DURATION 1.00
 #define MIN_FRAME_DURATION 0.01
@@ -160,7 +163,7 @@ public:
     bool   m_initVbv;
     int    m_lastAbrResetPoc;
 
-    int    m_lastScenecut;
+    int64_t m_lastScenecut;           /* display tick of the last scenecut, -1 if none */
     int    m_lastScenecutAwareIFrame;
     double m_rateTolerance;
     double m_bitrate;
@@ -209,7 +212,9 @@ public:
     double  m_movingSumComplexitySeg[3];
     int     m_frameCountSeg[3];
     double  m_segDur;
-    double  m_fps;              /* only a true framerate for CFR content */
+    /* track count of frames and their duration with exp decay to estimate local frame rate */
+    double  m_fpsTimeSum;
+    double  m_fpsFrameSum;
     double  m_timebase;
     int64_t m_satdCostWindow[50];
     int64_t m_encodedBitsWindow[50];

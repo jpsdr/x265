@@ -182,6 +182,7 @@ void x265_param_default(x265_param* param)
     param->bEmitHDRSEI = 0; /*Deprecated*/
     param->bEmitHDR10SEI = 0;
     param->bEmitIDRRecoverySEI = 0;
+    param->bEmitFrameFieldInfo = 0;
 
     /* CU definitions */
     param->maxCUSize = 64;
@@ -232,6 +233,7 @@ void x265_param_default(x265_param* param)
     param->bEnableConstrainedIntra = 0;
     param->bEnableStrongIntraSmoothing = 1;
     param->bEnableFastIntra = 0;
+    param->bEnableIntra64x64 = 0;
     param->bEnableSplitRdSkip = 0;
 
     /* Inter Coding tools */
@@ -864,6 +866,7 @@ int x265_zone_param_parse(x265_param* p, const char* name, const char* value)
     if (0);
     OPT("ref") p->maxNumReferences = atoi(value);
     OPT("fast-intra") p->bEnableFastIntra = atobool(value);
+    OPT("intra-64x64") p->bEnableIntra64x64 = atobool(value);
     OPT("early-skip") p->bEnableEarlySkip = atobool(value);
     OPT("rskip") p->recursionSkipMode = atoi(value);
     OPT("rskip-edge-threshold") p->edgeVarThreshold = atoi(value)/100.0f;
@@ -1395,6 +1398,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("uhd-bd") p->uhdBluray = atobool(value);
 
         OPT("csv") snprintf(p->csvfn, X265_MAX_STRING_SIZE, "%s", value);
+        OPT("intra-64x64") p->bEnableIntra64x64 = atobool(value);
         OPT("b-pyramid-qp-scale") p->bPyramidQpScale = atof(value);
         OPT("csv-log-level") p->csvLogLevel = atoi(value);
         OPT("log-file") snprintf(p->logfn, X265_MAX_STRING_SIZE, "%s", value);
@@ -2076,6 +2080,9 @@ int x265_check_params(x265_param* param)
         "Invalid refine-inter value, refine-inter levels 0 to 3 supported");
     CHECK(param->intraRefine > 4 || param->intraRefine < 0,
         "Invalid refine-intra value, refine-intra levels 0 to 3 supported");
+    if (param->bEnableIntra64x64 && param->bDynamicRefine && param->intraRefine == 4)
+        x265_log(param, X265_LOG_WARNING,
+            "intra-64x64 with dynamic-refine and refine-intra 4: the exhaustive intra re-search is skipped on classify frames to keep the 64x64 reconstruction consistent with the bitstream\n");
     CHECK(param->ctuDistortionRefine < 0 || param->ctuDistortionRefine > 1,
         "Invalid refine-ctu-distortion value, must be either 0 or 1");
     CHECK(param->maxAUSizeFactor < 0.5 || param->maxAUSizeFactor > 1.0,
@@ -2144,10 +2151,14 @@ int x265_check_params(x265_param* param)
 
     bool isSingleSEI = (param->bRepeatHeaders
                      || param->bEmitHRDSEI
+                     || param->bEmitFrameFieldInfo
                      || param->bEmitInfoSEI
                      || param->bEmitHDR10SEI
                      || param->bEmitIDRRecoverySEI
+                     /* the next 3 enable bEmitFrameFieldInfo later in the encoder set-up */
                    || !!param->interlaceMode
+                     || param->pictureStructure >= 0
+                     || param->bEnableFrameDuplication
                      || param->preferredTransferCharacteristics > 1
                      || param->framePacking > -1
                      || strlen(param->toneMapFile)
@@ -2376,6 +2387,7 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->bEnableConstrainedIntra, "cip");
     TOOLOPT(param->bIntraInBFrames, "b-intra");
     TOOLOPT(param->bEnableFastIntra, "fast-intra");
+    TOOLOPT(param->bEnableIntra64x64, "intra-64x64");
     if (param->bBPyramid == X265_B_PYRAMID_HIERARCHICAL && param->bPyramidQpScale != 1.0)
     {
         snprintf(tmp, sizeof(tmp), "b-pyramid-qp-scale=%.2f", param->bPyramidQpScale);
@@ -2554,6 +2566,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
         s += snprintf(s, bufSize - (s - buf), " rskip-edge-threshold=%f", p->edgeVarThreshold);
 
     BOOL(p->bEnableFastIntra, "fast-intra");
+    BOOL(p->bEnableIntra64x64, "intra-64x64");
     BOOL(p->bEnableTSkipFast, "tskip-fast");
     BOOL(p->bCULossless, "cu-lossless");
     BOOL(p->bIntraInBFrames, "b-intra");
@@ -3060,6 +3073,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->recursionSkipMode = src->recursionSkipMode;
     dst->edgeVarThreshold = src->edgeVarThreshold;
     dst->bEnableFastIntra = src->bEnableFastIntra;
+    dst->bEnableIntra64x64 = src->bEnableIntra64x64;
     dst->bEnableTSkipFast = src->bEnableTSkipFast;
     dst->bCULossless = src->bCULossless;
     dst->bIntraInBFrames = src->bIntraInBFrames;
@@ -3211,6 +3225,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->dynamicRd = src->dynamicRd;
     dst->bEmitHDR10SEI = src->bEmitHDR10SEI;
     dst->bEmitHRDSEI = src->bEmitHRDSEI;
+    dst->bEmitFrameFieldInfo = src->bEmitFrameFieldInfo;
     dst->bHDROpt = src->bHDROpt; /*DEPRECATED*/
     dst->bHDR10Opt = src->bHDR10Opt;
     dst->analysisReuseLevel = src->analysisReuseLevel;

@@ -354,6 +354,7 @@ void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
     bKeyframe = false; // Not a keyframe unless identified by lookahead
     bIsFadeEnd = false;
     filterThisGOP = false;
+    bApplyFilter = false;
     noiseScore = -1;
     frameNum = poc;
     leadingBframes = 0;

@@ -502,7 +502,8 @@ typedef struct x265_picture
      * of a frame, 2 for the second */
     int fieldNum;
 
-    /* Pic Timing SEI picture structure signaling. See PicStruct enumeration */
+    /* Pic Timing SEI picture structure signaling. See PicStruct enumeration.
+     * Requires x265_param.bEmitFrameFieldInfo to be set, ignored else. */
     uint32_t picStruct;
 
     int    width;
@@ -1315,9 +1316,16 @@ typedef struct x265_param
      * NAL at the start of every access unit. Default false */
     int       bEnableAccessUnitDelimiters;
 
-    /* Enables the buffering period SEI and picture timing SEI to signal the HRD
+    /* Enables the buffering period SEI and Pic Timing SEI to signal the HRD
      * parameters. Default is disabled */
     int       bEmitHRDSEI;
+
+    /* Sets VUI frame_field_info_present_flag and emits a Pic Timing SEI carrying
+     * x265_picture.picStruct. Enabled forcefully with bEnableFrameDuplication,
+     * interlaceMode or pictureStructure >= 0. It must be enabled if a per-picture
+     * picStruct is set by the user.
+     * API only, connected CLI options set this manually. Default disabled. */
+    int       bEmitFrameFieldInfo;
 
     /* Enables the emission of a user data SEI with the stream headers which
      * describes the encoder version, build info, and parameters. This is
@@ -2464,10 +2472,11 @@ typedef struct x265_param
      * upstream x265 when foveaDelta == 0 or foveaGazeFile == NULL with no gaze set. */
 
     /* Gaze fixation point in pixel coordinates. (0,0) = top-left.
-     * Ignored when foveaDelta == 0. */
+     * Negative means frame center; default -1. Ignored when foveaDelta == 0. */
     float    foveaGazeX;
 
-    /* Gaze fixation point Y in pixel coordinates. */
+    /* Gaze fixation point Y in pixel coordinates.
+     * Negative means frame center; default -1. */
     float    foveaGazeY;
 
     /* Maximum QP offset applied at the periphery (positive = lower quality).
@@ -2479,7 +2488,8 @@ typedef struct x265_param
     float    foveaSigma;
 
     /* Path to a per-frame gaze file (one line per frame: "frame_num x y").
-     * When set, overrides foveaGazeX/foveaGazeY with per-frame values.
+     * When set, overrides foveaGazeX/foveaGazeY with per-frame values;
+     * negative coordinates in a line mean frame center.
      * NULL = use static gaze from foveaGazeX/foveaGazeY. */
     char* foveaGazeFile;
 
@@ -2518,6 +2528,11 @@ typedef struct x265_param
      * QP, 1 keeps the offsets derived from --pbratio, above 1 makes them steeper. Range
      * 0 to 2. Default 1.0 */
     double   bPyramidQpScale;
+
+    /* Enable the evaluation of intra CUs at the 64x64 size, in addition to the
+     * 32x32 and smaller intra CU sizes. Improves intra compression on large flat
+     * regions at the cost of extra analysis. Default 0 (disabled). */
+    int      bEnableIntra64x64;
 } x265_param;
 
 /* x265_param_alloc:

@@ -1019,6 +1019,12 @@ the prediction quad-tree.
 	modes are checked.  Only applicable for :option:`--rd` levels 4 and
 	below (medium preset and faster).
 
+.. option:: --intra-64x64, --no-intra-64x64
+
+	Enable evaluation of 64x64 intra CUs in addition to the 32x32 and
+	smaller intra CU sizes. Improves intra compression on large flat
+	regions at the cost of extra analysis. Default disabled
+
 .. option:: --b-intra, --no-b-intra
 
 	Enables the evaluation of intra modes in B slices. Default enabled.
@@ -2079,9 +2085,9 @@ Quality, rate control and rate distortion options
 	limits of the rate, generally within 5% of the target rate. Typically, the
 	encoder stays conservative, waiting until there is enough feedback in terms
 	of encoded frames to control QP. strict-cbr allows the encoder to be more
-	aggressive in hitting the target, bitrate even for short segment videos.
+	aggressive in hitting the target bitrate even for short segment videos.
 
-	Requires :option:`--hrd` and VBV configuration. Default disabled.
+	Requires VBV configuration. Default disabled.
 	Without this flag, if :option:`--bitrate` is greater or equal to :option:`--vbv-maxrate`
 	then x265 tries to approach a CBR output in VBR mode.
 
@@ -2705,8 +2711,8 @@ VUI fields must be manually specified.
 	Set the picture structure and emits it in the picture timing SEI message.
 	Values in the range 0..12. See D.3.3 of the HEVC spec. for a detailed explanation.
 
-	Ignored with :option:`--interlace`, which sets pic_struct from the field
-	order. Requires :option:`--hrd`.
+	Ignored with :option:`--frame-dup`, :option:`--psfile`, :option:`--prepulldown-fps`
+	or :option:`--interlace` which sets pic_struct from the field order.
 
 .. option:: --prepulldown-fps <integer|float|numerator/denominator>
 
@@ -2717,10 +2723,6 @@ VUI fields must be manually specified.
     The ratio between the two rates shall not exceed 3. It can be
     fractional or a real number. Fractions are preferred to avoid drift
     from rounding errors.
-
-    Requires :option:`--hrd`, :option:`--vbv-maxrate` and
-    :option:`--vbv-bufsize`. Without VBV, the HRD SEI is disabled and
-    the pulldown is not written to the stream.
 
     Cannot be used concurrently with :option:`--frame-dup`, :option:`--psfile`,
     :option:`--pic-struct`, :option:`--interlace` or :option:`--temporal-layers`.
@@ -2739,12 +2741,8 @@ VUI fields must be manually specified.
 	It shall be compatible with the encoder configuration for the given sequence.
 	Unspecified framenumbers get a default structure (single frame or field).
 
-    Requires :option:`--hrd`, :option:`--vbv-maxrate` and
-    :option:`--vbv-bufsize`. Without VBV, the HRD SEI is disabled and the structures
-    are not written to the stream.
-
     Cannot be used concurrently with :option:`--frame-dup`, :option:`--pic-struct`,
-    :option:`--interlace`, :option:`--temporal-layers` or :option:`--prepulldown-fps`
+    :option:`--interlace`, :option:`--temporal-layers` or :option:`--prepulldown-fps`.
 
 .. option:: --video-signal-type-preset <string>
 
@@ -2943,8 +2941,9 @@ Bitstream options
 
 .. option:: --vui-hrd-info, --no-vui-hrd-info
 
-	Emit VUI HRD info in  bitstream. Default enabled when
-	:option:`--hrd` is enabled.
+	Emit VUI HRD info in  bitstream. Default enabled when :option:`--hrd` is enabled.
+	If forcefully disabled, Buffering Period and Pic Timing SEIs use
+	the default field coding lengths specified in the H.265 specification.
 
 .. option:: --opt-qp-pps, --no-opt-qp-pps
 
@@ -3274,7 +3273,8 @@ Foveated Encoding Options
 
 .. option:: --fovea-gaze <x,y>
 
-	Static gaze fixation in pixels (e.g. 960,540 for center).
+	Static gaze fixation in pixels (e.g. 960,540). Negative values mean
+	frame center. Default -1,-1 (center).
 
 .. option:: --fovea-delta <float>
     
@@ -3287,5 +3287,6 @@ Foveated Encoding Options
 .. option:: --fovea-gaze-file <path>
 
 	Per-frame gaze file (format: 'frame_num x y', one per line). Overrides --fovea-gaze.
+	Negative coordinates in a line mean frame center, same as --fovea-gaze.
 
 .. vim: noet
