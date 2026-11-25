@@ -359,8 +359,8 @@ protected:
     bool   findUnderflow(double *fills, int *t0, int *t1, int over, int framesCount);
     bool   fixUnderflow(int t0, int t1, double adjustment, double qscaleMin, double qscaleMax);
     double tuneQScaleForGrain(double rcOverflow);
-    void   splitdeltaPOC(char deltapoc[], RateControlEntry *rce);
-    void   splitbUsed(char deltapoc[], RateControlEntry *rce);
+    bool   splitdeltaPOC(char deltapoc[], RateControlEntry *rce);
+    bool   splitbUsed(char deltapoc[], RateControlEntry *rce);
     void   checkAndResetCRF(RateControlEntry* rce);
     int    cuTree_rescale_init();
     void   cuTree_rescale_destroy();

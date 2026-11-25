@@ -38,6 +38,8 @@
 #include "slicetype.h"
 #include "ratecontrol.h"
 #include "sei.h"
+#include <errno.h>
+#include <limits.h>
 
 #define BR_SHIFT  6
 #define CPB_SHIFT 4
@@ -579,7 +581,7 @@ bool RateControl::init(const SPS& sps)
                     }
                     *statsIn = '\0';
                     statsIn++;
-                    if ((p = strstr(opts, " input-res=")) == 0 || sscanf(p, " input-res=%dx%d", &i, &j) != 2)
+                    if ((p = strstr(opts, " input-res=")) == 0 || sscanf(p, " input-res=%dx%d", &i, &j) != 2 || i <= 0 || j <= 0)
                     {
                         x265_log(m_param, X265_LOG_ERROR, "Resolution specified in stats file not valid\n");
                         return false;
@@ -596,7 +598,15 @@ bool RateControl::init(const SPS& sps)
                             return false;
                         }
                     }
-                    res_factor = (float)m_param->sourceWidth * m_param->sourceHeight / (i*j);
+                    const int inputWidth = m_param->sourceWidth - sps.conformanceWindow.rightOffset;
+                    const int inputHeight = m_param->sourceHeight - sps.conformanceWindow.bottomOffset;
+                    if ((m_param->analysisMultiPassRefine || m_param->analysisMultiPassDistortion) &&
+                        (i != inputWidth || j != inputHeight))
+                    {
+                        x265_log(m_param, X265_LOG_ERROR, "Multipass analysis requires identical input resolutions\n");
+                        return false;
+                    }
+                    res_factor = (float)((double)m_param->sourceWidth * m_param->sourceHeight / ((double)i * j));
                     /* Change in bits relative to resolution isn't quite linear on typical sources,
                      * so we'll at least try to roughly approximate this effect. */
                     res_factor_bits = powf( res_factor, 0.7 );
@@ -619,7 +629,11 @@ bool RateControl::init(const SPS& sps)
                     if (m_param->analysisMultiPassRefine)
                     {
                         p = strstr(opts, "ref=");
-                        sscanf(p, "ref=%d", &i);
+                        if (!p || sscanf(p, "ref=%d", &i) != 1 || i < 1)
+                        {
+                            x265_log(m_param, X265_LOG_ERROR, "Invalid reference count in first pass stats\n");
+                            return false;
+                        }
                         if (i > m_param->maxNumReferences)
                         {
                             x265_log(m_param, X265_LOG_ERROR, "maxNumReferences cannot be less than 1st pass (%d vs %d)\n",
@@ -726,6 +740,9 @@ bool RateControl::init(const SPS& sps)
                     rce->qScale = rce->newQScale = x265_qp2qScale(20);
                     rce->miscBits = m_ncu + 10;
                     rce->newQp = 0;
+                    rce->scenecut = false;
+                    rce->encodeOrder = -1;
+                    m_encOrder[i] = -1;
                 }
                 /* read stats */
                 p = statsIn;
@@ -743,12 +760,24 @@ bool RateControl::init(const SPS& sps)
                     if (next)
                         *next++ = 0;
                     e = sscanf(p, " in:%d out:%d", &frameNumber, &encodeOrder);
-                    if (frameNumber < 0 || frameNumber >= m_numEntries)
+                    if (e != 2 || frameNumber < 0 || frameNumber >= m_numEntries ||
+                        encodeOrder < 0 || encodeOrder >= m_numEntries)
                     {
-                        x265_log(m_param, X265_LOG_ERROR, "bad frame number (%d) at stats line %d\n", frameNumber, i);
+                        x265_log(m_param, X265_LOG_ERROR, "invalid frame or encode order at stats line %d\n", i);
+                        return false;
+                    }
+                    if (m_encOrder[frameNumber] != -1)
+                    {
+                        x265_log(m_param, X265_LOG_ERROR, "Duplicate frame number at stats line %d\n", i);
                         return false;
                     }
                     rce = &m_rce2Pass[encodeOrder];
+                    if (rce->encodeOrder != -1)
+                    {
+                        x265_log(m_param, X265_LOG_ERROR, "Duplicate encode order at stats line %d\n", i);
+                        return false;
+                    }
+                    rce->encodeOrder = encodeOrder;
                     rcePocOrder = &m_rce2Pass[frameNumber];
                     m_encOrder[frameNumber] = encodeOrder;
                     if (!m_param->bMultiPassOptRPS)
@@ -758,6 +787,11 @@ bool RateControl::init(const SPS& sps)
                             &picType, &qpRc, &qpAq, &qNoVbv, &qRceq, &rce->coeffBits,
                             &rce->mvBits, &rce->miscBits, &rce->iCuCount, &rce->pCuCount,
                             &rce->skipCuCount, &scenecut, &rce->cpbDuration, &rce->frameDuration);
+                        if (e != 16)
+                        {
+                            x265_log(m_param, X265_LOG_ERROR, "Incomplete statistics at line %d\n", i);
+                            return false;
+                        }
                         rcePocOrder->scenecut = scenecut != 0;
                     }
                     else
@@ -770,8 +804,17 @@ bool RateControl::init(const SPS& sps)
                             &picType, &qpRc, &qpAq, &qNoVbv, &qRceq, &rce->coeffBits,
                             &rce->mvBits, &rce->miscBits, &rce->iCuCount, &rce->pCuCount,
                             &rce->skipCuCount, &rce->rpsData.numberOfPictures, &rce->rpsData.numberOfNegativePictures, &rce->rpsData.numberOfPositivePictures, deltaPOC, bUsed, &rce->cpbDuration, &rce->frameDuration);
-                        splitdeltaPOC(deltaPOC, rce);
-                        splitbUsed(bUsed, rce);
+                        if (e != 20 || rce->rpsData.numberOfPictures < 0 ||
+                            rce->rpsData.numberOfPictures > MAX_NUM_REF_PICS ||
+                            rce->rpsData.numberOfNegativePictures < 0 ||
+                            rce->rpsData.numberOfPositivePictures < 0 ||
+                            rce->rpsData.numberOfNegativePictures > rce->rpsData.numberOfPictures ||
+                            rce->rpsData.numberOfPositivePictures != rce->rpsData.numberOfPictures - rce->rpsData.numberOfNegativePictures ||
+                            !splitdeltaPOC(deltaPOC, rce) || !splitbUsed(bUsed, rce))
+                        {
+                            x265_log(m_param, X265_LOG_ERROR, "Invalid RPS statistics at line %d\n", i);
+                            return false;
+                        }
                         rce->rpsIdx = -1;
                     }
                     /* B-pyramid layer of the frame; stats written by older builds have none, and
@@ -3891,50 +3934,37 @@ void RateControl::destroy()
 
 }
 
-void RateControl::splitdeltaPOC(char deltapoc[], RateControlEntry *rce)
+bool RateControl::splitdeltaPOC(char deltapoc[], RateControlEntry *rce)
 {
-    int idx = 0, length = 0;
-    char tmpStr[128];
-    char* src = deltapoc;
-    char* buf = strstr(src, "~");
-    while (buf)
+    if (*deltapoc != '~')
+        return false;
+    char* src = deltapoc + 1;
+    for (int idx = 0; idx < rce->rpsData.numberOfPictures; idx++)
     {
-        memset(tmpStr, 0, sizeof(tmpStr));
-        length = (int)(buf - src);
-        if (length != 0)
-        {
-            strncpy(tmpStr, src, length);
-            rce->rpsData.deltaPOC[idx] = atoi(tmpStr);
-            idx++;
-            if (idx == rce->rpsData.numberOfPictures)
-                break;
-        }
-        src += (length + 1);
-        buf = strstr(src, "~");
+        char* end;
+        errno = 0;
+        long value = strtol(src, &end, 10);
+        if (end == src || *end != '~' || errno == ERANGE || value < INT_MIN || value > INT_MAX)
+            return false;
+        rce->rpsData.deltaPOC[idx] = (int)value;
+        src = end + 1;
     }
+    return *src == '\0';
 }
 
-void RateControl::splitbUsed(char bused[], RateControlEntry *rce)
+bool RateControl::splitbUsed(char bused[], RateControlEntry *rce)
 {
-    int idx = 0, length = 0;
-    char tmpStr[128];
-    char* src = bused;
-    char* buf = strstr(src, "~");
-    while (buf)
+    if (*bused != '~')
+        return false;
+    const char* src = bused + 1;
+    for (int idx = 0; idx < rce->rpsData.numberOfPictures; idx++)
     {
-        memset(tmpStr, 0, sizeof(tmpStr));
-        length = (int)(buf - src);
-        if (length != 0)
-        {
-            strncpy(tmpStr, src, length);
-            rce->rpsData.bUsed[idx] = atoi(tmpStr) > 0;
-            idx++;
-            if (idx == rce->rpsData.numberOfPictures)
-                break;
-        }
-        src += (length + 1);
-        buf = strstr(src, "~");
+        if ((*src != '0' && *src != '1') || src[1] != '~')
+            return false;
+        rce->rpsData.bUsed[idx] = *src == '1';
+        src += 2;
     }
+    return *src == '\0';
 }
 
 double RateControl::forwardMasking(Frame* curFrame, double q)
