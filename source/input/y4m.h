@@ -61,6 +61,8 @@ protected:
 
     AtomicBool threadActive;
 
+    AtomicBool readFailed;
+
     ThreadSafeInteger readCount;
 
     ThreadSafeInteger writeCount;
@@ -78,7 +80,7 @@ public:
     virtual ~Y4MInput();
     void release();
     bool isEof() const            { return ifs && feof(ifs); }
-    bool isFail()                 { return !(ifs && !ferror(ifs) && threadActive); }
+    bool isFail()                 { return readFailed; }
     void startReader();
     void stopReader() {}
     bool readPicture(x265_picture&);

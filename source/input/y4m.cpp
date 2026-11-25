@@ -47,6 +47,7 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
     for (int i = 0; i < QUEUE_SIZE; i++)
         buf[i] = NULL;
 
+    readFailed = true;
     threadActive = false;
     colorSpace = info.csp;
     alphaAvailable = alpha;
@@ -141,6 +142,7 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
                 if (fread(buf[0], estFrameSize - framesize, 1, ifs) + fread(buf[0], framesize, 1, ifs) != 2)
                     break;
     }
+    readFailed = false;
 }
 Y4MInput::~Y4MInput()
 {
@@ -317,7 +319,7 @@ bool Y4MInput::parseHeader()
 
     if (width < MIN_FRAME_WIDTH || width > MAX_FRAME_WIDTH ||
         height < MIN_FRAME_HEIGHT || height > MAX_FRAME_HEIGHT ||
-        (rateNum / rateDenom) < 1 || (rateNum / rateDenom) > MAX_FRAME_RATE ||
+        !rateDenom || (rateNum / rateDenom) < 1 || (rateNum / rateDenom) > MAX_FRAME_RATE ||
         colorSpace < X265_CSP_I400 || colorSpace >= X265_CSP_COUNT)
         return false;
 
@@ -327,8 +329,11 @@ bool Y4MInput::parseHeader()
 void Y4MInput::startReader()
 {
 #if ENABLE_THREADING
-    if (threadActive)
-        start();
+    if (threadActive && !start())
+    {
+        readFailed = true;
+        threadActive = false;
+    }
 #endif
 }
 
@@ -348,20 +353,31 @@ void Y4MInput::threadMain()
 bool Y4MInput::populateFrameQueue()
 {
     if (!ifs || ferror(ifs))
+    {
+        readFailed = true;
         return false;
+    }
     /* strip off the FRAME\n header */
     char hbuf[sizeof(header) + 1];
-    if (fread(hbuf, sizeof(hbuf), 1, ifs) != 1 || memcmp(hbuf, header, sizeof(header)))
+    size_t headerBytes = fread(hbuf, 1, sizeof(hbuf), ifs);
+    if (headerBytes != sizeof(hbuf) || memcmp(hbuf, header, sizeof(header)))
     {
-        if (!feof(ifs))
-            x265_log(NULL, X265_LOG_ERROR, "y4m: frame header missing\n");
+        if (headerBytes != 0 || ferror(ifs) || !feof(ifs))
+        {
+            readFailed = true;
+            x265_log(NULL, X265_LOG_ERROR, "y4m: frame header missing or incomplete\n");
+        }
         return false;
     }
     /* consume bytes up to line feed */
     int c = hbuf[sizeof(header)];
     while (c != '\n')
         if ((c = fgetc(ifs)) == EOF)
-            break;
+        {
+            readFailed = true;
+            x265_log(NULL, X265_LOG_ERROR, "y4m: incomplete frame header\n");
+            return false;
+        }
     /* wait for room in the ring buffer */
     int written = writeCount.get();
     int read = readCount.get();
@@ -372,13 +388,15 @@ bool Y4MInput::populateFrameQueue()
             return false;
     }
     ProfileScopeEvent(frameRead);
-    if (fread(buf[written % QUEUE_SIZE], framesize, 1, ifs) == 1)
+    size_t bytesRead = fread(buf[written % QUEUE_SIZE], 1, framesize, ifs);
+    if (bytesRead == framesize && !ferror(ifs))
     {
         writeCount.incr();
         return true;
     }
-    else
-        return false;
+    readFailed = true;
+    x265_log(NULL, X265_LOG_ERROR, "y4m: incomplete frame or read error\n");
+    return false;
 }
 
 bool Y4MInput::readPicture(x265_picture& pic)
@@ -395,6 +413,7 @@ bool Y4MInput::readPicture(x265_picture& pic)
 #else
 
     populateFrameQueue();
+    written = writeCount.get();
 
 #endif // if ENABLE_THREADING
 

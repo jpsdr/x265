@@ -51,6 +51,7 @@ YUVInput::YUVInput(InputFileInfo& info, bool alpha, int format)
     height = info.height;
     colorSpace = info.csp;
     alphaAvailable = alpha;
+    readFailed = true;
     threadActive = false;
     ifs = NULL;
 
@@ -134,6 +135,7 @@ YUVInput::YUVInput(InputFileInfo& info, bool alpha, int format)
                 if (fread(buf[0], framesize, 1, ifs) != 1)
                     break;
     }
+    readFailed = false;
 }
 YUVInput::~YUVInput()
 {
@@ -154,8 +156,11 @@ void YUVInput::release()
 void YUVInput::startReader()
 {
 #if ENABLE_THREADING
-    if (threadActive)
-        start();
+    if (threadActive && !start())
+    {
+        readFailed = true;
+        threadActive = false;
+    }
 #endif
 }
 
@@ -174,7 +179,10 @@ void YUVInput::threadMain()
 bool YUVInput::populateFrameQueue()
 {
     if (!ifs || ferror(ifs))
+    {
+        readFailed = true;
         return false;
+    }
     /* wait for room in the ring buffer */
     int written = writeCount.get();
     int read = readCount.get();
@@ -186,13 +194,18 @@ bool YUVInput::populateFrameQueue()
             return false;
     }
     ProfileScopeEvent(frameRead);
-    if (fread(buf[written % QUEUE_SIZE], framesize, 1, ifs) == 1)
+    size_t bytesRead = fread(buf[written % QUEUE_SIZE], 1, framesize, ifs);
+    if (bytesRead == framesize && !ferror(ifs))
     {
         writeCount.incr();
         return true;
     }
-    else
-        return false;
+    if (bytesRead != 0 || ferror(ifs) || !feof(ifs))
+    {
+        readFailed = true;
+        x265_log(NULL, X265_LOG_ERROR, "yuv: incomplete frame or read error\n");
+    }
+    return false;
 }
 
 bool YUVInput::readPicture(x265_picture& pic)
@@ -209,6 +222,7 @@ bool YUVInput::readPicture(x265_picture& pic)
 #else
 
     populateFrameQueue();
+    written = writeCount.get();
 
 #endif // if ENABLE_THREADING
 
