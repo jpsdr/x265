@@ -54,6 +54,7 @@ void VPYInput::setAsyncFrame(int n, const VSFrame* f, const char* errorMsg)
     if (!f)
     {
         snprintf(frameError, sizeof(frameError), "%s", errorMsg ? errorMsg : "unknown error");
+        general_log(nullptr, "vpy", X265_LOG_ERROR, "error occurred while reading frame %d: %s\n", n, frameError);
         vpyFailed = true;
     }
     frameMap.at(n).second = f;
@@ -75,7 +76,7 @@ const VSFrame* VPYInput::getAsyncFrame(int n)
         frame = frameMap.at(n).second;
         CloseEvent(event);
         frameMap.erase(n);
-        if (frame && requestedFrames < framesToRequest && isRunning)
+        if (frame && requestedFrames < framesToRequest && isRunning && !vpyFailed)
             request = requestedFrames++;
     }
     if (request >= 0)
@@ -398,8 +399,6 @@ bool VPYInput::readPicture(x265_picture& pic)
     if (!currentFrame)
     {
         std::lock_guard<std::mutex> lock(frameMutex);
-        fprintf(stderr, "%*s\r", 130, " "); // make it more readable
-        general_log(nullptr, "vpy", X265_LOG_ERROR, "error occurred while reading frame %d: %s\n", nextFrame, frameError);
         framesToRequest = nextFrame;
         vpyFailed = true;
         return false;
