@@ -2327,10 +2327,10 @@ void x265_print_params(x265_param* param)
     {
         char str_aqauto[20];
 
-        strcpy_s(str_aqauto, 20, "auto");
-        if (param->rc.AQAuto_hyst) strcat_s(str_aqauto, 20, "-hyst");
-        if (param->rc.AQAuto_hdr) strcat_s(str_aqauto, 20, "-hdr");
-        if (param->rc.AQAuto_aq5) strcat_s(str_aqauto, 20, "-aq5");
+        snprintf(str_aqauto, sizeof(str_aqauto), "auto%s%s%s",
+                 param->rc.AQAuto_hyst ? "-hyst" : "",
+                 param->rc.AQAuto_hdr ? "-hdr" : "",
+                 param->rc.AQAuto_aq5 ? "-aq5" : "");
 
         x265_log(param, X265_LOG_INFO, "AQ: mode / str(edg) / qg-size / cu-tree : %s / %0.1f(%0.1f) / %d / %d\n", str_aqauto, param->rc.aqStrength, param->rc.aqStrengthEdge, param->rc.qgSize, param->rc.cuTree);
     }

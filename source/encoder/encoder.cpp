@@ -2737,7 +2737,8 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->rc.bitrate = param->rc.bitrate;
         m_reconfigureRc |= encParam->rc.rfConstant != param->rc.rfConstant;
         encParam->rc.rfConstant = param->rc.rfConstant;
-		encParam->rc.qScaleMode = param->rc.qScaleMode;
+        m_reconfigureRc |= encParam->rc.qScaleMode != param->rc.qScaleMode;
+        encParam->rc.qScaleMode = param->rc.qScaleMode;
         m_reconfigureRc |= encParam->rc.qp != param->rc.qp;
         encParam->rc.qp = param->rc.qp;
 
@@ -2806,6 +2807,7 @@ bool Encoder::isReconfigureRc(x265_param* latestParam, x265_param* param_in)
         || latestParam->rc.vbvBufferSize != param_in->rc.vbvBufferSize
         || latestParam->rc.bitrate != param_in->rc.bitrate
         || latestParam->rc.rfConstant != param_in->rc.rfConstant
+        || latestParam->rc.qScaleMode != param_in->rc.qScaleMode
         || latestParam->rc.qp != param_in->rc.qp);
 }
 
@@ -4292,6 +4294,10 @@ void Encoder::configure(x265_param *p)
         p->rc.aqMode = X265_AQ_NONE;
         p->rc.hevcAq = 0;
     }
+    p->rc.AQAuto_hyst = (p->rc.AQAuto & 0x02) != 0;
+    p->rc.AQAuto_hdr = (p->rc.AQAuto & 0x04) != 0;
+    p->rc.AQAuto_aq5 = (p->rc.AQAuto & 0x08) != 0;
+
     if (p->rc.aqMode == X265_AQ_NONE && p->rc.cuTree == 0)
         p->rc.aqStrength = 0;
     if (p->rc.hevcAq && p->rc.aqMode)
