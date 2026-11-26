@@ -226,6 +226,14 @@ void FrameFilter::init(Encoder *top, FrameEncoder *frame, int numRows, uint32_t 
 void FrameFilter::start(Frame *frame, Entropy& initState)
 {
     m_frame = frame;
+    m_bNeedReferenceBorder =
+        IS_REFERENCED(frame) || m_param->numLayers > 1 || m_param->bEnableSCC || m_param->searchMethod == X265_SEA;
+    m_bNeedFilteredRecon = m_bNeedReferenceBorder || m_frameEncoder->m_bNeedReconOutput || m_param->bEnablePsnr ||
+                           m_param->bEnableSsim || m_param->decodedPictureHashSEI;
+#if ENABLE_LIBVMAF
+    m_bNeedFilteredRecon = true;
+#endif
+    m_bUseDeblock = m_param->bEnableLoopFilter && (m_bNeedFilteredRecon || m_useSao);
 
     // Reset Filter Data Struct
     if (m_parallelFilter)
@@ -320,6 +328,9 @@ void FrameFilter::ParallelFilter::copySaoAboveRef(const CUData *ctu, PicYuv* rec
 
 void FrameFilter::ParallelFilter::processSaoCTU(SAOParam *saoParam, int col)
 {
+    if (!m_frameFilter->m_bNeedFilteredRecon)
+        return;
+
     // TODO: apply SAO on CU and copy back soon, is it necessary?
     if (saoParam->bSaoFlag[0])
         m_sao.generateLumaOffsets(saoParam->ctuParam[0], m_row, col);
@@ -344,6 +355,9 @@ void FrameFilter::ParallelFilter::processPostCu(int col) const
 {
     // Update finished CU cursor
     m_frameFilter->m_frame->m_reconColCount[m_row].set(col);
+
+    if (!m_frameFilter->m_bNeedReferenceBorder)
+        return;
 
     // shortcut path for non-border area
     if ((col != 0) & (col != m_frameFilter->m_numCols - 1) & (m_row != 0) & (m_row != m_frameFilter->m_numRows - 1))
@@ -465,7 +479,7 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
         const uint32_t cuAddr = m_rowAddr + col;
         const CUData* ctu = m_encData->getPicCTU(cuAddr);
 
-        if (m_frameFilter->m_param->bEnableLoopFilter)
+        if (m_frameFilter->m_bUseDeblock)
         {
             deblockCTU(ctu, cuGeoms[ctuGeomMap[cuAddr]], Deblock::EDGE_VER);
         }
@@ -473,7 +487,7 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
         if (col >= 1)
         {
             const CUData* ctuPrev = m_encData->getPicCTU(cuAddr - 1);
-            if (m_frameFilter->m_param->bEnableLoopFilter)
+            if (m_frameFilter->m_bUseDeblock)
             {
                 deblockCTU(ctuPrev, cuGeoms[ctuGeomMap[cuAddr - 1]], Deblock::EDGE_HOR);
 
@@ -485,7 +499,8 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
             if (m_frameFilter->m_useSao)
             {
                 // Save SAO bottom row reference pixels
-                copySaoAboveRef(ctuPrev, reconPic, cuAddr - 1, col - 1);
+                if (m_frameFilter->m_bNeedFilteredRecon)
+                    copySaoAboveRef(ctuPrev, reconPic, cuAddr - 1, col - 1);
 
                 // SAO Decide
                 if (col >= 2)
@@ -515,7 +530,7 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
         const uint32_t cuAddr = m_rowAddr + numCols - 1;
         const CUData* ctuPrev = m_encData->getPicCTU(cuAddr);
 
-        if (m_frameFilter->m_param->bEnableLoopFilter)
+        if (m_frameFilter->m_bUseDeblock)
         {
             deblockCTU(ctuPrev, cuGeoms[ctuGeomMap[cuAddr]], Deblock::EDGE_HOR);
 
@@ -530,7 +545,8 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
             const CUData* ctu = m_encData->getPicCTU(m_rowAddr + numCols - 2);
 
             // Save SAO bottom row reference pixels
-            copySaoAboveRef(ctuPrev, reconPic, cuAddr, numCols - 1);
+            if (m_frameFilter->m_bNeedFilteredRecon)
+                copySaoAboveRef(ctuPrev, reconPic, cuAddr, numCols - 1);
 
             // SAO Decide
             // NOTE: reduce condition check for 1 CU only video, Why someone play with it?
@@ -567,6 +583,50 @@ void FrameFilter::ParallelFilter::processTasks(int /*workerThreadId*/)
     }
 }
 
+void FrameFilter::finishNonReferenceRecon()
+{
+    if (m_bNeedFilteredRecon)
+        return;
+
+    m_bNeedFilteredRecon = true;
+    if (m_param->bEnableLoopFilter && !m_bUseDeblock)
+    {
+        const CUGeom *cuGeoms = m_frameEncoder->m_cuGeoms;
+        const uint32_t *ctuGeomMap = m_frameEncoder->m_ctuGeomMap;
+        FrameData *encData = m_frame->m_encData;
+        for (int row = 0; row < m_numRows; row++)
+        {
+            int rowAddr = row * m_numCols;
+            for (int col = 0; col < m_numCols; col++)
+            {
+                int addr = rowAddr + col;
+                Deblock::deblockCTU(encData->getPicCTU(addr), cuGeoms[ctuGeomMap[addr]], Deblock::EDGE_VER);
+                if (col)
+                    Deblock::deblockCTU(encData->getPicCTU(addr - 1), cuGeoms[ctuGeomMap[addr - 1]], Deblock::EDGE_HOR);
+            }
+            int last = rowAddr + m_numCols - 1;
+            Deblock::deblockCTU(encData->getPicCTU(last), cuGeoms[ctuGeomMap[last]], Deblock::EDGE_HOR);
+        }
+        m_bUseDeblock = true;
+    }
+    if (m_useSao)
+    {
+        FrameData *encData = m_frame->m_encData;
+        for (int row = 0; row < m_numRows; row++)
+        {
+            for (int col = 0; col < m_numCols; col++)
+            {
+                int addr = row * m_numCols + col;
+                m_parallelFilter[row].copySaoAboveRef(encData->getPicCTU(addr), encData->m_reconPic[0], addr, col);
+            }
+        }
+        SAOParam *saoParam = m_frame->m_encData->m_saoParam;
+        for (int row = 0; row < m_numRows; row++)
+            for (int col = 0; col < m_numCols; col++)
+                m_parallelFilter[row].processSaoCTU(saoParam, col);
+    }
+}
+
 void FrameFilter::processRow(int row, int layer)
 {
     ProfileScopeEvent(filterCTURow);
@@ -576,7 +636,7 @@ void FrameFilter::processRow(int row, int layer)
     m_frameEncoder->m_cuStats.countLoopFilter++;
 #endif
 
-    if (!m_param->bEnableLoopFilter && !m_useSao)
+    if (!m_bUseDeblock && !m_useSao)
     {
         processPostRow(row, layer);
         return;

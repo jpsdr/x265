@@ -57,6 +57,7 @@ static inline bool shouldRunMLPred(const Encoder* top, const Frame* frame)
 FrameEncoder::FrameEncoder()
 {
     m_reconfigure = false;
+    m_bNeedReconOutput = false;
     m_isFrameEncoder = true;
     m_threadActive = true;
     m_activeWorkerCount = 0;
@@ -319,8 +320,9 @@ bool FrameEncoder::initializeGeoms()
     return true;
 }
 
-bool FrameEncoder::startCompressFrame(Frame* curFrame[MAX_LAYERS])
+bool FrameEncoder::startCompressFrame(Frame *curFrame[MAX_LAYERS], bool needReconOutput)
 {
+    m_bNeedReconOutput = needReconOutput;
     for (int layer = 0; layer < m_param->numLayers; layer++)
     {
         m_slicetypeWaitTime[layer] = x265_mdate() - m_prevOutputTime[layer];
@@ -1875,7 +1877,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             m_frameFilter.m_parallelFilter[row].m_sao.calcSaoStatsCu_BeforeDblk(m_frame[layer], col, row);
 
         /* Deblock with idle threading */
-        if (m_param->bEnableLoopFilter | slice->m_bUseSao)
+        if ((int)m_frameFilter.m_bUseDeblock | slice->m_bUseSao)
         {
             // NOTE: in VBV mode, we may reencode anytime, so we can't do Deblock stage-Horizon and SAO
             if (!bIsVbv)
@@ -2193,7 +2195,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
 
 
     /* Processing left Deblock block with current threading */
-    if ((m_param->bEnableLoopFilter | slice->m_bUseSao) & (rowInSlice >= 2))
+    if (((int)m_frameFilter.m_bUseDeblock | slice->m_bUseSao) & (rowInSlice >= 2))
     {
         /* Check conditional to start previous row process with current threading */
         if (m_frameFilter.m_parallelFilter[row - 2].m_lastDeblocked.get() == (int)numCols)

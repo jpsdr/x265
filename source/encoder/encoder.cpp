@@ -2145,6 +2145,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     x265_free_analysis_data(m_param, &outFrame->m_analysisData);
                 if (pic_out)
                 {
+                    curEncoder->m_frameFilter.finishNonReferenceRecon();
                     PicYuv* recpic = outFrame->m_reconPic[0];
                     pic_out[sLayer].poc = slice->m_poc;
                     pic_out[sLayer].bitDepth = X265_DEPTH;
@@ -2710,7 +2711,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
 
             /* Allow FrameEncoder::compressFrame() to start in the frame encoder thread */
-            if (!curEncoder->startCompressFrame(frameEnc))
+            if (!curEncoder->startCompressFrame(frameEnc, pic_out != NULL))
                 m_aborted = true;
         }
         else if (m_encodedFrameNum)
