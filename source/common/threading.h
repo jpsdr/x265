@@ -230,6 +230,17 @@ public:
         return ret;
     }
 
+    template<typename StopFlag>
+    int waitForChange(int prev, const StopFlag& stopped)
+    {
+        EnterCriticalSection(&m_cs);
+        if (m_val == prev && !stopped)
+            SleepConditionVariableCS(&m_cv, &m_cs, INFINITE);
+        int ret = m_val;
+        LeaveCriticalSection(&m_cs);
+        return ret;
+    }
+
     int get()
     {
         EnterCriticalSection(&m_cs);
@@ -479,6 +490,17 @@ public:
     {
         pthread_mutex_lock(&m_mutex);
         if (m_val == prev)
+            pthread_cond_wait(&m_cond, &m_mutex);
+        int ret = m_val;
+        pthread_mutex_unlock(&m_mutex);
+        return ret;
+    }
+
+    template<typename StopFlag>
+    int waitForChange(int prev, const StopFlag& stopped)
+    {
+        pthread_mutex_lock(&m_mutex);
+        if (m_val == prev && !stopped)
             pthread_cond_wait(&m_cond, &m_mutex);
         int ret = m_val;
         pthread_mutex_unlock(&m_mutex);

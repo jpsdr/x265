@@ -77,7 +77,8 @@ namespace X265_NS {
         x265_encoder *m_encoder;
         Reader *m_reader;
         Scaler *m_scaler;
-        bool m_inputOver;
+        AtomicBool m_inputOver;
+        AtomicBool m_inputFailed;
 
         int m_threadActive;
         int m_lastIdx;

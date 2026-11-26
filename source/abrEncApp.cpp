@@ -253,6 +253,7 @@ namespace X265_NS {
         }
         m_param = cliopt.param;
         m_inputOver = false;
+        m_inputFailed = false;
         m_lastIdx = -1;
         m_encoder = NULL;
         m_scaler = NULL;
@@ -518,7 +519,7 @@ ret:
         bool isAbrLoad = m_cliopt.loadLevel && (m_parent->m_numEncodes > 1);
         while (!m_inputOver && (ipread == ipwrite))
         {
-            ipwrite = m_parent->m_picWriteCnt[m_id].waitForChange(ipwrite);
+            ipwrite = m_parent->m_picWriteCnt[m_id].waitForChange(ipwrite, m_inputOver);
         }
 
         if (m_threadActive && ipread < ipwrite)
@@ -613,7 +614,11 @@ ret:
             return true;
         }
         else
+        {
+            if (m_inputFailed && !m_ret)
+                m_ret = 4;
             return false;
+        }
     }
 
     void PassEncoder::threadMain()
@@ -1440,12 +1445,16 @@ ret:
                 }
                 else
                 {
+                    if (m_input[view]->isFail())
+                        m_parentEnc->m_inputFailed = true;
                     m_threadActive = false;
-                    m_parentEnc->m_inputOver = true;
-                    m_parentEnc->m_parent->m_picWriteCnt[m_id].poke();
+                    break;
                 }
             }
         }
+        m_threadActive = false;
+        m_parentEnc->m_inputOver = true;
+        m_parentEnc->m_parent->m_picWriteCnt[m_id].poke();
         x265_picture_free(src);
     }
 }
