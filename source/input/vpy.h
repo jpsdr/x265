@@ -25,8 +25,6 @@
 #define X265_VPY_H
 
 #include <unordered_map>
-#include <atomic>
-#include <mutex>
 #include <string>
 #include <vector>
 #include <map>
@@ -34,6 +32,7 @@
 #include <vapoursynth/VSScript4.h>
 #include <vapoursynth/VSHelper4.h>
 #include "input.h"
+#include "threading.h"
 
 #if _WIN32
 #include <windows.h>
@@ -80,15 +79,15 @@ protected:
 
     std::unordered_map<int, std::pair<HANDLE, const VSFrame*>> frameMap;
     int parallelRequests {-1};
-    std::atomic<int> requestedFrames {-1};
-    std::atomic<int> completedFrames {-1};
+    AtomicInt32 requestedFrames {-1};
+    AtomicInt32 completedFrames {-1};
     int framesToRequest {-1};
-    std::atomic<bool> isRunning {false};
+    AtomicBool isRunning {false};
     int nextFrame {0};
     int nodeIndex {0};
     bool useScriptSar {false};
-    std::atomic<bool> vpyFailed {false};
-    std::mutex frameMutex;
+    AtomicBool vpyFailed {false};
+    Lock frameMutex;
     char frameError[512] {};
     size_t frame_size {0};
     uint8_t* frame_buffer {nullptr};

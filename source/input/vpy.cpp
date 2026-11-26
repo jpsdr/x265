@@ -50,7 +50,7 @@ void VS_CC logMessageHandler(int msgType, const char* msg, void*)
 
 void VPYInput::setAsyncFrame(int n, const VSFrame* f, const char* errorMsg)
 {
-    std::lock_guard<std::mutex> lock(frameMutex);
+    ScopedLock lock(frameMutex);
     if (!f)
     {
         snprintf(frameError, sizeof(frameError), "%s", errorMsg ? errorMsg : "unknown error");
@@ -65,14 +65,14 @@ const VSFrame* VPYInput::getAsyncFrame(int n)
 {
     HANDLE event;
     {
-        std::lock_guard<std::mutex> lock(frameMutex);
+        ScopedLock lock(frameMutex);
         event = frameMap.at(n).first;
     }
     WaitForSingleObject(event, INFINITE);
     const VSFrame* frame;
     int request = -1;
     {
-        std::lock_guard<std::mutex> lock(frameMutex);
+        ScopedLock lock(frameMutex);
         frame = frameMap.at(n).second;
         CloseEvent(event);
         frameMap.erase(n);
@@ -353,11 +353,11 @@ void VPYInput::stopReader()
 
     while (requestedFrames != completedFrames)
     {
-        general_log(nullptr, "vpy", X265_LOG_INFO, "waiting completion of %d requested frames...    \r", requestedFrames.load() - completedFrames.load());
+        general_log(nullptr, "vpy", X265_LOG_INFO, "waiting completion of %d requested frames...    \r", int(requestedFrames) - int(completedFrames));
         Sleep(400);
     }
 
-    std::lock_guard<std::mutex> lock(frameMutex);
+    ScopedLock lock(frameMutex);
     for (auto &iter : frameMap)
     {
         if (iter.second.second)
@@ -398,7 +398,7 @@ bool VPYInput::readPicture(x265_picture& pic)
 
     if (!currentFrame)
     {
-        std::lock_guard<std::mutex> lock(frameMutex);
+        ScopedLock lock(frameMutex);
         framesToRequest = nextFrame;
         vpyFailed = true;
         return false;
