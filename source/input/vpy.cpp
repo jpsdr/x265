@@ -24,6 +24,15 @@
 #include "vpy.h"
 #include "common.h"
 
+// For Windows build
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+
 using namespace X265_NS;
 
 void __stdcall frameDoneCallback(void* userData, const VSFrame* f, const int n, VSNode*, const char* errorMsg)
