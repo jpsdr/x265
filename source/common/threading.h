@@ -225,8 +225,9 @@ public:
         EnterCriticalSection(&m_cs);
         if (m_val == prev)
             SleepConditionVariableCS(&m_cv, &m_cs, INFINITE);
+        int ret = m_val;
         LeaveCriticalSection(&m_cs);
-        return m_val;
+        return ret;
     }
 
     int get()
