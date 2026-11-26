@@ -64,9 +64,7 @@ private:
     int             frameOffset = 0;
 
     // Internal State
-    int             if (fail || !gopFP)
-            return -1;
-        currentFrame = 0;
+    int             currentFrame = 0;
     FILE*           gopFP = nullptr;
     FILE*           dataFP = nullptr;
 
@@ -99,6 +97,8 @@ public:
 
     int WriteHeaders(const x265_nal* p_nal, uint32_t nalcount)
     {
+        if (fail || !gopFP)
+            return -1;
         currentFrame = 0;
         int totalWrites = 0;
 
