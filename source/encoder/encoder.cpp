@@ -5742,8 +5742,10 @@ void Encoder::readAnalysisFile(x265_analysis_data* analysis, int curPoc, const x
                             {
                                 (analysis->interData)->mvpIdx[i][count + pu] = mvpIdx[i][d];
                                 (analysis->interData)->refIdx[i][count + pu] = refIdx[i][d];
-                                mvCopy[i].x = mv[i][d].x * (int32_t)m_param->scaleFactor;
-                                mvCopy[i].y = mv[i][d].y * (int32_t)m_param->scaleFactor;
+                                mvCopy[i].x = (int32_t)x265_clip3((int64_t)-32768, (int64_t)32767,
+                                    (int64_t)mv[i][d].x * m_param->scaleFactor);
+                                mvCopy[i].y = (int32_t)x265_clip3((int64_t)-32768, (int64_t)32767,
+                                    (int64_t)mv[i][d].y * m_param->scaleFactor);
                                 memcpy(&(analysis->interData)->mv[i][count + pu], &mvCopy[i], sizeof(MV));
                             }
                         }

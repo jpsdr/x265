@@ -852,6 +852,13 @@ void MotionEstimate::refineMV(ReferencePlanes* ref,
     else
         bmv = bmv.toQPel(); // promote search bmv to qpel
 
+    // Integer search may extend beyond the signalled MV range.
+    if (!bmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
+    {
+        bmv = bmv.clipped(MV(-32768, -32768), MV(32767, 32767));
+        bcost = subpelCompare(ref, bmv, sad) + mvcost(bmv);
+    }
+
     // TO DO: Change SubpelWorkload to fine tune MV
     // Now it is set to 5 for experiment.
     // const SubpelWorkload& wl = workload[this->subpelRefine];
@@ -875,7 +882,8 @@ void MotionEstimate::refineMV(ReferencePlanes* ref,
             MV qmv = bmv + square1[i] * 2;            
 
             // check mv range for slice bound
-            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                 continue;
 
             int cost = subpelCompare(ref, qmv, hpelcomp) + mvcost(qmv);
@@ -900,7 +908,8 @@ void MotionEstimate::refineMV(ReferencePlanes* ref,
             MV qmv = bmv + square1[i];
             
             // check mv range for slice bound
-            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                 continue;
 
             int cost = subpelCompare(ref, qmv, satd) + mvcost(qmv);
@@ -1651,6 +1660,14 @@ me_hex2:
     else
         bmv = bmv.toQPel(); // promote search bmv to qpel
 
+    // Integer search may extend beyond the signalled MV range.
+    if (!bmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
+    {
+        bmv = bmv.clipped(MV(-32768, -32768), MV(32767, 32767));
+        bcost = (ref->isLowres ? ref->lowresQPelCost(fenc, blockOffset, bmv, sad, hme)
+                              : subpelCompare(ref, bmv, sad)) + mvcost(bmv);
+    }
+
     const SubpelWorkload& wl = workload[this->subpelRefine];
 
     // check mv range for slice bound
@@ -1674,7 +1691,8 @@ me_hex2:
             MV qmv = bmv + square1[i] * 2;
 
             /* skip invalid range */
-            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                 continue;
 
             int cost = ref->lowresQPelCost(fenc, blockOffset, qmv, sad, hme) + mvcost(qmv);
@@ -1690,7 +1708,8 @@ me_hex2:
             MV qmv = bmv + square1[i];
 
             /* skip invalid range */
-            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+            if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                 continue;
 
             int cost = ref->lowresQPelCost(fenc, blockOffset, qmv, satd, hme) + mvcost(qmv);
@@ -1719,7 +1738,8 @@ me_hex2:
                 MV qmv = bmv + square1[i] * 2;
 
                 // check mv range for slice bound
-                if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+                if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                    !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                     continue;
 
                 int cost = subpelCompare(ref, qmv, hpelcomp) + mvcost(qmv);
@@ -1744,7 +1764,8 @@ me_hex2:
                 MV qmv = bmv + square1[i];
 
                 // check mv range for slice bound
-                if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y))
+                if ((qmv.y < qmvmin.y) | (qmv.y > qmvmax.y) |
+                    !qmv.checkRange(MV(-32768, -32768), MV(32767, 32767)))
                     continue;
 
                 int cost = subpelCompare(ref, qmv, satd) + mvcost(qmv);
