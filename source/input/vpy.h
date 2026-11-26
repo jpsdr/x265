@@ -29,8 +29,7 @@
 #include <vector>
 #include <map>
 #include <array>
-#include <vapoursynth/VSScript4.h>
-#include <vapoursynth/VSHelper4.h>
+#include <vapoursynth/VapourSynth4.h>
 #include "input.h"
 #include "threading.h"
 
